@@ -1,0 +1,12 @@
+# WELCOME!
+
+This is your Wiki Home.  Update this page for your purposes.  Here are some useful links to help you build the wiki.
+
+- [Wiki Specific Markdown](https://docs.gitlab.com/ee/user/markdown.html#wiki-specific-markdown)
+- [GitLab Markdown](https://docs.gitlab.com/ee/user/markdown.html)
+
+Read about building hierarchical links (https://docs.gitlab.com/ee/user/markdown.html#wiki---hierarchical-link).  This will help keep the wiki organized.
+
+- [Project Documentation](/wiki/projectDocs/Project Documentation)
+- [Product Documentation](/wiki/productDocs/Product Documentation)
+  - [Designs](./Product Designs)
