@@ -3,8 +3,8 @@
  *
  * Supports various file types:
  * - Structured data: CSV, JSON, Excel
- * - Documents: PDF (for business context via RAG)
- * - Images: PNG, JPG (for previews and visualizations)
+ * - Documents: PDF, Markdown, Word (for business context via RAG)
+ * - Note: Images are NOT supported for upload
  */
 
 export type FileType =
@@ -12,7 +12,9 @@ export type FileType =
   | 'json'
   | 'excel'
   | 'pdf'
-  | 'image'
+  | 'markdown'
+  | 'word'
+  | 'text'
   | 'other';
 
 export interface UploadedFile {
@@ -88,6 +90,26 @@ export interface ColumnStatistics {
 }
 
 /**
+ * Query mode for data viewer
+ */
+export type QueryMode = 'english' | 'sql';
+
+/**
+ * Query artifact - represents a saved query result
+ * Similar to a browser tab or Jupyter notebook cell
+ */
+export interface QueryArtifact {
+  id: string;
+  name: string; // Display name (auto-generated or custom)
+  query: string; // The actual query text
+  mode: QueryMode;
+  result: DataPreview;
+  timestamp: Date;
+  isSaved: boolean; // Whether saved to backend (future feature)
+  projectId: string;
+}
+
+/**
  * File icon mapping based on file type
  * Returns lucide-react icon name
  */
@@ -97,7 +119,9 @@ export const getFileIcon = (type: FileType): string => {
     json: 'Braces',
     excel: 'Sheet',
     pdf: 'FileText',
-    image: 'Image',
+    markdown: 'FileCode',
+    word: 'FileType',
+    text: 'FileText',
     other: 'File'
   };
   return iconMap[type];
@@ -124,7 +148,9 @@ export const getFileType = (file: File): FileType => {
   if (extension === 'json') return 'json';
   if (extension === 'xlsx' || extension === 'xls') return 'excel';
   if (extension === 'pdf') return 'pdf';
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(extension || '')) return 'image';
+  if (extension === 'md') return 'markdown';
+  if (extension === 'docx' || extension === 'doc') return 'word';
+  if (extension === 'txt') return 'text';
 
   return 'other';
 };

@@ -41,18 +41,6 @@ export function FilePreview({ file, open, onOpenChange }: FilePreviewProps) {
 
     // Generate preview based on file type
     switch (file.type) {
-      case 'image':
-        const imageUrl = URL.createObjectURL(file.file);
-        setPreviewContent(
-          <img
-            src={imageUrl}
-            alt={file.name}
-            className="max-w-full h-auto rounded-lg"
-            onLoad={() => setIsLoading(false)}
-          />
-        );
-        break;
-
       case 'pdf':
         const pdfUrl = URL.createObjectURL(file.file);
         setPreviewContent(

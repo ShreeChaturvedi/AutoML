@@ -3,21 +3,22 @@
  *
  * Routes:
  * - / : Home page (project selection)
- * - /project/:id : Project workspace with tabs
+ * - /project/:id : Redirects to current phase
+ * - /project/:id/:phase : Project workspace with phase content
  *
  * TODO: Add more routes as features are built (settings, profile, etc.)
  */
 
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { UploadArea } from '@/components/upload/UploadArea';
 import { DataViewerTab } from '@/components/data/DataViewerTab';
 import { useProjectStore } from '@/stores/projectStore';
-import { useTabStore } from '@/stores/tabStore';
 import { FolderOpen, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
 import { ProjectDialog } from '@/components/projects/ProjectDialog';
+import type { Phase } from '@/types/phase';
 
 // Home page - shown when no project is selected
 function HomePage() {
@@ -57,42 +58,65 @@ function HomePage() {
   );
 }
 
-// Project workspace - shown when a project is selected
-function ProjectWorkspace() {
+// Redirect to current phase
+function ProjectRedirect() {
   const { projectId } = useParams();
   const projects = useProjectStore((state) => state.projects);
-  const activeTabId = useTabStore((state) => state.activeTabId);
-  const tabs = useTabStore((state) => state.tabs);
-
-  const project = projectId ? projects.find(p => p.id === projectId) : undefined;
-  const activeTab = tabs.find(t => t.id === activeTabId);
+  const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
 
   if (!project) {
     return <Navigate to="/" replace />;
   }
 
-  // Render content based on active tab type
-  if (!activeTab) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center space-y-2">
-          <FolderOpen className="h-12 w-12 text-muted-foreground/50 mx-auto" />
-          <h3 className="text-lg font-semibold text-foreground">No tab open</h3>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            Create a new tab from the tab bar to start working on your project.
-          </p>
-        </div>
-      </div>
-    );
+  // Redirect to current phase (or upload if not set)
+  return <Navigate to={`/project/${projectId}/${project.currentPhase || 'upload'}`} replace />;
+}
+
+// Project workspace - shown when a project and phase are selected
+function ProjectWorkspace() {
+  const { projectId, phase } = useParams<{ projectId: string; phase: Phase }>();
+  const projects = useProjectStore((state) => state.projects);
+  const setCurrentPhase = useProjectStore((state) => state.setCurrentPhase);
+  const isPhaseUnlocked = useProjectStore((state) => state.isPhaseUnlocked);
+
+  const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
+
+  // Set active project if not set
+  const setActiveProject = useProjectStore((state) => state.setActiveProject);
+  useEffect(() => {
+    if (projectId && projectId !== useProjectStore.getState().activeProjectId) {
+      setActiveProject(projectId);
+    }
+  }, [projectId, setActiveProject]);
+
+  if (!project) {
+    return <Navigate to="/" replace />;
   }
 
-  // Render content based on tab type
-  switch (activeTab.type) {
-    case 'data-viewer':
-      return <DataViewerTab />;
+  if (!phase) {
+    return <Navigate to={`/project/${projectId}/${project.currentPhase || 'upload'}`} replace />;
+  }
 
+  // Check if phase is unlocked
+  if (!isPhaseUnlocked(projectId, phase as Phase)) {
+    // Redirect to current phase if locked
+    return <Navigate to={`/project/${projectId}/${project.currentPhase}`} replace />;
+  }
+
+  // Update current phase
+  useEffect(() => {
+    if (phase && project.currentPhase !== phase) {
+      setCurrentPhase(projectId, phase as Phase);
+    }
+  }, [phase, projectId, project.currentPhase, setCurrentPhase]);
+
+  // Render content based on phase
+  switch (phase as Phase) {
     case 'upload':
       return <UploadArea />;
+
+    case 'data-viewer':
+      return <DataViewerTab />;
 
     case 'preprocessing':
       return (
@@ -188,20 +212,19 @@ function ProjectWorkspace() {
       );
 
     default:
-      return null;
+      return <Navigate to={`/project/${projectId}/upload`} replace />;
   }
 }
 
 function App() {
-  console.log('App component rendering');
-
   return (
     <BrowserRouter>
-      <div style={{ minHeight: '100vh', width: '100%', backgroundColor: '#0f172a', color: 'white' }}>
+      <div className="min-h-screen w-full bg-background text-foreground">
         <AppShell>
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/project/:projectId" element={<ProjectWorkspace />} />
+            <Route path="/project/:projectId" element={<ProjectRedirect />} />
+            <Route path="/project/:projectId/:phase" element={<ProjectWorkspace />} />
           </Routes>
         </AppShell>
       </div>

@@ -53,10 +53,11 @@ frontend/
 ### UI Components (`src/components/ui/`)
 - **Purpose**: Reusable, unstyled primitive components from shadcn/ui
 - **Source**: Copied from shadcn/ui registry (not installed via npm)
-- **Examples**: `button.tsx`, `dialog.tsx`, `card.tsx`, `table.tsx`
+- **Examples**: `button.tsx`, `dialog.tsx`, `card.tsx`, `table.tsx`, `switch.tsx`, `tabs.tsx`
 - **Guidelines**:
   - Do not modify these directly (copy and create variants instead)
   - Update manually when shadcn/ui releases new versions
+  - All components built on Radix UI primitives for accessibility
 
 ### Layout Components (`src/components/layout/`)
 - **AppShell.tsx**: Main application layout container
@@ -69,7 +70,12 @@ frontend/
 ### Feature Components
 - **projects/**: Project management UI (list, item, dialog, user profile)
 - **upload/**: File upload area, file cards, file preview
-- **data/**: Data table (TanStack Table), statistics, column info
+- **data/**: Data exploration and query interface
+  - `DataTable.tsx`: Enhanced table with pagination, search, export (TanStack Table)
+  - `DataStats.tsx`: Dataset statistics and column info
+  - `DataViewerTab.tsx`: Main data viewer orchestration
+  - `QueryPanel.tsx`: Query builder with English/SQL toggle and Monaco Editor
+  - `QueryResultsPanel.tsx`: Tabbed interface for query artifacts
 
 ## State Management
 
@@ -90,6 +96,8 @@ Each store is a separate Zustand slice with clear responsibilities:
    - File upload state
    - Data preview (rows, columns, statistics)
    - Processing state
+   - Query artifacts management (query results as tabs)
+   - Active artifact selection
 
 **Why separate stores?**
 - Clear separation of concerns
@@ -117,6 +125,8 @@ Each store is a separate Zustand slice with clear responsibilities:
 - `FileType`: Union type of supported file types
 - `DataPreview`: Preview data structure
 - `ColumnStatistics`: Column-level statistics
+- `QueryMode`: 'english' | 'sql' for query builder
+- `QueryArtifact`: Saved query result with metadata
 - Helper functions: `getFileIcon()`, `formatFileSize()`, `getFileType()`
 
 ## Naming Conventions
@@ -165,6 +175,38 @@ import { cn } from '@/lib/utils';
 - **Types**: Owned by us
 - **Documentation**: Owned by us, keep updated
 
+## Recently Added
+
+### Data Viewer Enhancement (2025-09-30)
+Added comprehensive query interface with Tableau-style data exploration:
+
+**New Components:**
+- `QueryPanel.tsx`: Dual-mode query builder (English/SQL) with Monaco Editor
+- `QueryResultsPanel.tsx`: Tabbed interface for managing query artifacts
+- Enhanced `DataTable.tsx`: Added pagination, search, CSV export
+
+**New UI Components:**
+- `switch.tsx`: Toggle component (Radix UI Switch)
+- `tabs.tsx`: Tabbed interface component (Radix UI Tabs)
+
+**Type Extensions:**
+- `QueryMode`: 'english' | 'sql'
+- `QueryArtifact`: Query result metadata
+
+**Store Extensions:**
+- Query artifacts management in `dataStore.ts`
+- Artifact CRUD operations
+- Active artifact tracking
+
+**Dependencies Added:**
+- `@monaco-editor/react`: SQL syntax highlighting and code editing
+- `@radix-ui/react-switch`: Accessible toggle component
+- `@radix-ui/react-tabs`: Accessible tabs component
+
+**Documentation Added:**
+- `data-viewer-system.md`: Complete design system for data viewer
+- `typography.md`: Typography guidelines and font usage
+
 ## Future Expansion
 
 As the project grows, consider:
@@ -173,3 +215,4 @@ As the project grows, consider:
 - **utils/**: More utility functions (validation, formatting, etc.)
 - **constants/**: Application constants (API URLs, config values, etc.)
 - **assets/**: Images, fonts, and other static assets
+- **tests/**: Unit and integration tests for components

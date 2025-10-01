@@ -21,14 +21,14 @@ export function ProjectList() {
   return (
     <div className="space-y-2">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Projects
         </h2>
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6"
+          className="h-6 w-6 flex-shrink-0"
           onClick={() => setIsCreateDialogOpen(true)}
         >
           <Plus className="h-4 w-4" />

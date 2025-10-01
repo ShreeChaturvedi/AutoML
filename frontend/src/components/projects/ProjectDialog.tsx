@@ -156,35 +156,34 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Title and Icon Preview Row */}
-          <div className="flex items-start gap-3">
-            {/* Title Field */}
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="title">
-                Title <span className="text-destructive">*</span>
-              </Label>
-              <Input id="title" placeholder="My ML Project" {...register('title')} />
-              {errors.title && (
-                <p className="text-xs text-destructive">{errors.title.message}</p>
-              )}
-            </div>
-
-            {/* Icon Preview (Clickable) */}
-            <div className="space-y-2">
-              <Label>Icon</Label>
+          <div className="space-y-2">
+            <Label htmlFor="title">
+              Title <span className="text-destructive">*</span>
+            </Label>
+            <div className="flex items-center gap-3">
+              {/* Icon Preview (Clickable) */}
               <button
                 type="button"
                 onClick={() => setIsIconPickerOpen(true)}
                 className={cn(
-                  'flex h-14 w-14 items-center justify-center rounded-lg border-2 transition-all hover:scale-105',
+                  'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border-2 transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background',
                   projectColorClasses[selectedColor].bg,
                   projectColorClasses[selectedColor].text,
                   projectColorClasses[selectedColor].border
                 )}
                 title="Click to change icon"
               >
-                {PreviewIconComponent && <PreviewIconComponent className="h-6 w-6" />}
+                {PreviewIconComponent && <PreviewIconComponent className="h-5 w-5" />}
               </button>
+
+              {/* Title Field */}
+              <div className="flex-1">
+                <Input id="title" placeholder="My ML Project" {...register('title')} />
+              </div>
             </div>
+            {errors.title && (
+              <p className="text-xs text-destructive">{errors.title.message}</p>
+            )}
           </div>
 
           {/* Description */}
@@ -194,6 +193,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
               id="description"
               placeholder="Optional description..."
               rows={3}
+              className="w-full"
               {...register('description')}
             />
             {errors.description && (
@@ -205,22 +205,37 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
           <div className="space-y-2">
             <Label>Color</Label>
             <div className="flex flex-wrap gap-2">
-              {colorOptions.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={cn(
-                    'h-8 w-8 rounded-md border-2 transition-all',
-                    `bg-${color}-500`,
-                    selectedColor === color
-                      ? 'border-foreground ring-2 ring-offset-2 ring-primary scale-110'
-                      : 'border-border hover:border-foreground hover:scale-105'
-                  )}
-                  onClick={() => setValue('color', color)}
-                  title={color}
-                  aria-label={`Select ${color} color`}
-                />
-              ))}
+              {colorOptions.map((color) => {
+                const colorClass = {
+                  blue: 'bg-blue-500',
+                  green: 'bg-green-500',
+                  purple: 'bg-purple-500',
+                  pink: 'bg-pink-500',
+                  orange: 'bg-orange-500',
+                  red: 'bg-red-500',
+                  yellow: 'bg-yellow-500',
+                  indigo: 'bg-indigo-500',
+                  teal: 'bg-teal-500',
+                  cyan: 'bg-cyan-500'
+                }[color];
+
+                return (
+                  <button
+                    key={color}
+                    type="button"
+                    className={cn(
+                      'h-8 w-8 rounded-md border-2 transition-all',
+                      colorClass,
+                      selectedColor === color
+                        ? 'border-foreground ring-2 ring-offset-2 ring-offset-background ring-primary scale-110'
+                        : 'border-border hover:border-foreground hover:scale-105'
+                    )}
+                    onClick={() => setValue('color', color)}
+                    title={color}
+                    aria-label={`Select ${color} color`}
+                  />
+                );
+              })}
             </div>
           </div>
 

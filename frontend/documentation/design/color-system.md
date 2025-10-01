@@ -79,21 +79,26 @@ type ProjectColor =
   | 'teal' | 'cyan';
 ```
 
-Each color has associated Tailwind classes:
-- `bg`: Background color (10% opacity)
-- `text`: Text/icon color
-- `hover`: Hover state background (20% opacity)
-- `border`: Border color (20% opacity)
+Each color has associated Tailwind classes that adapt to light/dark mode:
+- `bg`: Background color (solid in light mode, opacity in dark mode)
+- `text`: Text/icon color (darker shade in light, lighter in dark)
+- `hover`: Hover state background
+- `border`: Border color
 
 **Example:**
 ```typescript
 blue: {
-  bg: 'bg-blue-500/10',
-  text: 'text-blue-500',
-  hover: 'hover:bg-blue-500/20',
-  border: 'border-blue-500/20'
+  bg: 'bg-blue-100 dark:bg-blue-500/20',
+  text: 'text-blue-700 dark:text-blue-400',
+  hover: 'hover:bg-blue-200 dark:hover:bg-blue-500/30',
+  border: 'border-blue-300 dark:border-blue-500/40'
 }
 ```
+
+**Design Philosophy:**
+- Light mode uses solid colors (100-300 shades) for better contrast
+- Dark mode uses opacity-based colors for consistency with existing design
+- Text colors are adjusted for WCAG AA compliance in both modes
 
 ## Theme Management
 
