@@ -7,6 +7,11 @@
 
 [[_TOC_]]
 
+## Quick Links
+
+- [[Charter|Project documentation/Charter]]
+
+
 # REFERENCES
 Read the following articles to familiarize yourself with Gitlab and how you will be expected to use it during your project.
 
