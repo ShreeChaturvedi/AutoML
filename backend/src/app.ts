@@ -1,0 +1,45 @@
+import cors from 'cors';
+import express, { Request, Response, Router } from 'express';
+import morgan from 'morgan';
+
+import { env } from './config.js';
+import { createProjectRepository } from './repositories/projectRepository.js';
+import { registerHealthRoutes } from './routes/health.js';
+import { registerProjectRoutes } from './routes/projects.js';
+
+export function createApp() {
+  const app = express();
+  const projectRepository = createProjectRepository(env.storagePath);
+
+  app.set('trust proxy', true);
+  app.use(
+    cors({
+      origin: env.allowedOrigins,
+      credentials: true
+    })
+  );
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true }));
+  app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
+
+  const router = Router();
+  registerHealthRoutes(router);
+  registerProjectRoutes(router, projectRepository);
+
+  app.use('/api', router);
+
+  app.get('/', (_req, res) => {
+    res.json({ message: 'AI-Augmented AutoML Toolchain API' });
+  });
+
+  app.use((_req, res) => {
+    res.status(404).json({ error: 'Not Found' });
+  });
+
+  app.use((err: unknown, _req: Request, res: Response) => {
+    console.error(err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  });
+
+  return app;
+}
