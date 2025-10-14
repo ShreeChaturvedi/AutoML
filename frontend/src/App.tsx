@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { UploadArea } from '@/components/upload/UploadArea';
@@ -24,6 +25,32 @@ import type { Phase } from '@/types/phase';
 function HomePage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const projects = useProjectStore((state) => state.projects);
+  const isInitialized = useProjectStore((state) => state.isInitialized);
+  const isLoading = useProjectStore((state) => state.isLoading);
+  const error = useProjectStore((state) => state.error);
+
+  if (!isInitialized && isLoading && projects.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading projects...</p>
+      </div>
+    );
+  }
+
+  if (error && projects.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-sm text-destructive">{error}</p>
+          <Button size="sm" variant="outline" onClick={() => setIsCreateDialogOpen(true)}>
+            <FolderOpen className="h-4 w-4 mr-2" />
+            Create Project
+          </Button>
+          <ProjectDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full items-center justify-center">
@@ -62,6 +89,13 @@ function HomePage() {
 function ProjectRedirect() {
   const { projectId } = useParams();
   const projects = useProjectStore((state) => state.projects);
+  const isInitialized = useProjectStore((state) => state.isInitialized);
+  const isLoading = useProjectStore((state) => state.isLoading);
+
+  if (!isInitialized) {
+    return isLoading ? null : <Navigate to="/" replace />;
+  }
+
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
 
   if (!project) {
@@ -69,7 +103,7 @@ function ProjectRedirect() {
   }
 
   // Redirect to current phase (or upload if not set)
-  return <Navigate to={`/project/${projectId}/${project.currentPhase || 'upload'}`} replace />;
+  return <Navigate to={`/project/${project.id}/${project.currentPhase || 'upload'}`} replace />;
 }
 
 // Project workspace - shown when a project and phase are selected
@@ -78,37 +112,49 @@ function ProjectWorkspace() {
   const projects = useProjectStore((state) => state.projects);
   const setCurrentPhase = useProjectStore((state) => state.setCurrentPhase);
   const isPhaseUnlocked = useProjectStore((state) => state.isPhaseUnlocked);
+  const setActiveProject = useProjectStore((state) => state.setActiveProject);
+  const isInitialized = useProjectStore((state) => state.isInitialized);
 
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
 
-  // Set active project if not set
-  const setActiveProject = useProjectStore((state) => state.setActiveProject);
   useEffect(() => {
-    if (projectId && projectId !== useProjectStore.getState().activeProjectId) {
+    if (!isInitialized || !projectId) return;
+    const activeId = useProjectStore.getState().activeProjectId;
+    if (projectId !== activeId) {
       setActiveProject(projectId);
     }
-  }, [projectId, setActiveProject]);
+  }, [isInitialized, projectId, setActiveProject]);
+
+  useEffect(() => {
+    if (!isInitialized || !project || !phase) return;
+    if (project.currentPhase !== phase) {
+      setCurrentPhase(project.id, phase as Phase);
+    }
+  }, [isInitialized, project, phase, setCurrentPhase]);
+
+  if (!isInitialized) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          Loading project workspace...
+        </p>
+      </div>
+    );
+  }
 
   if (!project) {
     return <Navigate to="/" replace />;
   }
 
   if (!phase) {
-    return <Navigate to={`/project/${projectId}/${project.currentPhase || 'upload'}`} replace />;
+    return <Navigate to={`/project/${project.id}/${project.currentPhase || 'upload'}`} replace />;
   }
 
   // Check if phase is unlocked
-  if (!isPhaseUnlocked(projectId, phase as Phase)) {
+  if (!isPhaseUnlocked(project.id, phase as Phase)) {
     // Redirect to current phase if locked
-    return <Navigate to={`/project/${projectId}/${project.currentPhase}`} replace />;
+    return <Navigate to={`/project/${project.id}/${project.currentPhase}`} replace />;
   }
-
-  // Update current phase
-  useEffect(() => {
-    if (phase && project.currentPhase !== phase) {
-      setCurrentPhase(projectId, phase as Phase);
-    }
-  }, [phase, projectId, project.currentPhase, setCurrentPhase]);
 
   // Render content based on phase
   switch (phase as Phase) {
@@ -212,21 +258,54 @@ function ProjectWorkspace() {
       );
 
     default:
-      return <Navigate to={`/project/${projectId}/upload`} replace />;
+      return <Navigate to={`/project/${project.id}/upload`} replace />;
   }
 }
 
 function App() {
+  const initialize = useProjectStore((state) => state.initialize);
+  const isInitialized = useProjectStore((state) => state.isInitialized);
+  const isLoading = useProjectStore((state) => state.isLoading);
+  const error = useProjectStore((state) => state.error);
+  const projects = useProjectStore((state) => state.projects);
+
+  useEffect(() => {
+    void initialize();
+  }, [initialize]);
+
+  let content: ReactNode;
+
+  if (!isInitialized && isLoading && projects.length === 0) {
+    content = (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Connecting to backend...</p>
+      </div>
+    );
+  } else if (!isInitialized && error && projects.length === 0) {
+    content = (
+      <div className="flex h-full items-center justify-center">
+        <div className="space-y-2 text-center">
+          <p className="text-sm text-destructive">{error}</p>
+          <Button size="sm" variant="outline" onClick={() => initialize()}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  } else {
+    content = (
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/project/:projectId" element={<ProjectRedirect />} />
+        <Route path="/project/:projectId/:phase" element={<ProjectWorkspace />} />
+      </Routes>
+    );
+  }
+
   return (
     <BrowserRouter>
       <div className="min-h-screen w-full bg-background text-foreground">
-        <AppShell>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/project/:projectId" element={<ProjectRedirect />} />
-            <Route path="/project/:projectId/:phase" element={<ProjectWorkspace />} />
-          </Routes>
-        </AppShell>
+        <AppShell>{content}</AppShell>
       </div>
     </BrowserRouter>
   );
