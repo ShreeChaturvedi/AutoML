@@ -3,13 +3,16 @@ import express, { Request, Response, Router } from 'express';
 import morgan from 'morgan';
 
 import { env } from './config.js';
+import { createDatasetRepository } from './repositories/datasetRepository.js';
 import { createProjectRepository } from './repositories/projectRepository.js';
+import { createDatasetUploadRouter } from './routes/datasets.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerProjectRoutes } from './routes/projects.js';
 
 export function createApp() {
   const app = express();
   const projectRepository = createProjectRepository(env.storagePath);
+  const datasetRepository = createDatasetRepository(env.datasetMetadataPath);
 
   app.set('trust proxy', true);
   app.use(
@@ -25,6 +28,7 @@ export function createApp() {
   const router = Router();
   registerHealthRoutes(router);
   registerProjectRoutes(router, projectRepository);
+  router.use(createDatasetUploadRouter(datasetRepository));
 
   app.use('/api', router);
 
