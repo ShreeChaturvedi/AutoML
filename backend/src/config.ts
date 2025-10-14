@@ -23,5 +23,7 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: parsePort(process.env.PORT),
   allowedOrigins: parseOrigins(process.env.ALLOWED_ORIGINS),
-  storagePath: process.env.STORAGE_PATH ?? 'storage/projects.json'
+  storagePath: process.env.STORAGE_PATH ?? 'storage/projects.json',
+  datasetStorageDir: process.env.DATASET_STORAGE_DIR ?? 'storage/datasets/files',
+  datasetMetadataPath: process.env.DATASET_METADATA_PATH ?? 'storage/datasets/metadata.json'
 };
