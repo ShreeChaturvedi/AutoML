@@ -41,11 +41,15 @@ Copy `.env.example` to `.env` to override defaults:
 PORT=4000
 ALLOWED_ORIGINS=http://localhost:5173
 STORAGE_PATH=storage/projects.json
+DATASET_METADATA_PATH=storage/datasets/metadata.json
+DATASET_STORAGE_DIR=storage/datasets/files
 ```
 
 - `PORT` – Port the HTTP server binds to
 - `ALLOWED_ORIGINS` – Comma-separated list of origins allowed via CORS
-- `STORAGE_PATH` – Placeholder for future persistence (currently unused while data stays in memory)
+- `STORAGE_PATH` – JSON file that stores project metadata
+- `DATASET_METADATA_PATH` – JSON file storing dataset profiles
+- `DATASET_STORAGE_DIR` – Directory where uploaded dataset files are saved
 
 ## API Surface (Sprint 1)
 
@@ -59,3 +63,12 @@ STORAGE_PATH=storage/projects.json
 | DELETE | `/api/projects/:id`| Remove a project                                 |
 
 Projects are persisted to the JSON file configured via `STORAGE_PATH` (defaults to `storage/projects.json`). The directory is created automatically, and invalid JSON falls back to an empty project list with a warning.
+
+## API Surface (Sprint 2 – In Progress)
+
+| Method | Route                  | Description                                                                 |
+| ------ | ---------------------- | --------------------------------------------------------------------------- |
+| GET    | `/api/datasets`        | List stored dataset profiles and metadata                                   |
+| POST   | `/api/upload/dataset`  | Accepts CSV/JSON/XLSX upload, profiles the dataset, and returns summary stats |
+
+`POST /api/upload/dataset` expects a `multipart/form-data` request with the file in the `file` field and optionally `projectId`. The response contains column names, inferred dtypes, row/null counts, and a sample of the data. Raw files are saved in `DATASET_STORAGE_DIR`, while profiling metadata lives in `DATASET_METADATA_PATH`.
