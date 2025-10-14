@@ -1,72 +1,144 @@
-> [!note] This project template:
->
-> This begins your capstone development effort.  You will use GitLab as your primary repository for code and documentation.  In these early phases, you may not be delivering 'working software' but you will be delivering just enough documentation to show an understanding of the product in order to communicate a high-level understanding of the product, objectives, scope and quality requirements.  The issues and boards can also be used to collaborate on research.  For those of you on an R&D project, issues are a great way to track each research question.  The comments and team collaboration build a large body of knowledge during your efforts. 
->
->Regarding this readme.md file, ultimately you will update this page to reflect your project and assist anyone who has access to your repository.
->
+# AI-Augmented AutoML Toolchain
 
-[[_TOC_]]
+Modern AutoML workspace combining a TypeScript/Express API, a React data science UI, and an end-to-end Playwright benchmark. Built and maintained by the CSE 448 capstone team.
 
-## Quick Links
+## Table of Contents
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [System Requirements](#system-requirements)
+- [Getting Started](#getting-started)
+  - [Install Dependencies](#install-dependencies)
+  - [Configure Environment](#configure-environment)
+  - [Run the Stack](#run-the-stack)
+- [Development Workflow](#development-workflow)
+- [Repository Structure](#repository-structure)
+- [Tooling & Commands](#tooling--commands)
+- [Documentation](#documentation)
+- [Data Storage](#data-storage)
+- [Support](#support)
+- [License](#license)
 
-- [[Charter|Project documentation/Charter]]
+## Overview
 
-## Automated Benchmark
+The AI-Augmented AutoML Toolchain streamlines dataset ingestion, exploratory analysis, and model workflow orchestration. The solution ships as a monorepo with three coordinated workspaces:
 
-From the repository root you can execute the end-to-end benchmark that spins up both backend and frontend, then drives the UI with Playwright:
+1. `backend/` – Express + TypeScript API exposing project management and dataset profiling endpoints.
+2. `frontend/` – Vite + React SPA delivering the AutoML user experience.
+3. `testing/` – Playwright benchmark suite validating critical user journeys against compiled artifacts.
+
+Refer to `ARCHITECTURE.md` for a detailed system design and interaction diagram.
+
+## Key Features
+
+- Project lifecycle management with persisted metadata and workflow phase tracking.
+- Dataset ingestion pipeline with CSV/JSON/XLSX profiling, schema inference, and sample extraction.
+- Rich client UI with drag-and-drop uploads, tabbed data viewer, and Tailwind + shadcn component system.
+- Unified developer command (`npm --prefix frontend run dev`) that launches both frontend and backend in watch mode.
+- Automated Playwright benchmark (`npm run benchmark`) that builds both workspaces and verifies end-to-end flows.
+
+## System Requirements
+
+- **Node.js**: 22 LTS
+- **npm**: 10+
+- **OS**: macOS, Linux, or Windows (WSL recommended)
+- Optional: Chromium download permissions for Playwright benchmark runs.
+
+## Getting Started
+
+### Install Dependencies
+
+From the repository root, install workspace dependencies:
 
 ```bash
-npm run benchmark
+npm --prefix backend install
+npm --prefix frontend install
+npm --prefix testing install   # required for automated benchmark
 ```
 
-> Tip: run `npm --prefix testing install` once to install the Playwright dependencies before your first benchmark.
+### Configure Environment
 
-To watch the run in a real browser window, use:
+1. Copy environment template if backend defaults need adjustment:
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+2. Update values such as `PORT`, `ALLOWED_ORIGINS`, and storage paths as needed (see `backend/src/config.ts`).
+
+### Run the Stack
 
 ```bash
-npm run benchmark:headed
+npm --prefix frontend run dev
 ```
 
+The command above launches:
+- Backend API at `http://localhost:4000/api`
+- Vite dev server at `http://localhost:5173`
 
-# REFERENCES
-Read the following articles to familiarize yourself with Gitlab and how you will be expected to use it during your project.
+Run the workspaces individually when required:
+- `npm --prefix backend run dev` – backend only
+- `npm --prefix frontend run dev:ui` – frontend only
 
-* [How to use GitLab for Agile Software Development](https://about.gitlab.com/blog/2018/03/05/gitlab-for-agile-software-development/). 
-* [How to Write a Beautiful and Meaningful README.md*](https://blog.bitsrc.io/how-to-write-beautiful-and-meaningful-readme-md-for-your-next-project-897045e3f991#:~:text=It's%20a%20set%20of%20useful,github%20below%20the%20project%20directory.) - buidling your ReadMe file 
-* [Always start with an issue](https://docs.gitlab.com/user/project/issues/) - This article discusses issues and how to use them to collaborate.  Several issue and merge templates are provided in the .gitlab/issue_templates and .gitlab/merge_request_templates.  These should facilitate collaboration and quality. Feel free to edit them to fit the needs of this project.
-* [Template Samples](https://gitlab.com/gitlab-org/gitlab/-/tree/master/.gitlab/issue_templates)
+## Development Workflow
 
+1. **Code** – Implement changes in the appropriate workspace.
+2. **Lint/Test** – Execute local checks:
+   - `npm --prefix backend run lint`
+   - `npm --prefix frontend run lint`
+3. **Validate End-to-End** – `npm run benchmark` (headless) or `npm run benchmark:headed` (with browser UI).
+4. **Review** – Ensure docs and type definitions are updated before submitting changes.
 
-# BRANCHING
+## Repository Structure
 
-This project templates includes 2 branches to start with.  
+```text
+ai-augmented-auto-ml-toolchain/
+├── ARCHITECTURE.md
+├── backend/
+│   ├── src/
+│   └── storage/
+├── frontend/
+│   └── src/
+├── testing/
+│   └── tests/
+└── Attachments/
+```
 
-| **Name**   | **Description** |
-| ------ | ------ |
-| MAIN         | Protected branch.  You cannot push directly to MAIN.  This branch should be what you push to your test server (ceclnx for example) or other devices for your client to review. |
-| . . .          | Thereafter, you should follow the code management strategy defined and agreed upon by the team.  I recommend a branch from MAIN for each sprint or interval.  From the sprint-branch, I recommend branching by issue.  Throughout the sprint, rebase your issue branch regularly especially begore a commit.  If an issue is incomplete during the prescribed sprint, commit it to the next spring branch.  This approach gives the MAIN branch an additional degree of protection. |
+- Application flows and file-level references are documented in `ARCHITECTURE.md`.
+- Workspace-specific guidance lives in `backend/README.md` and `frontend/README.md`.
 
-## Protected Branches
-The MAIN branch is the default branch.  There are several protections in place:
-1. By default, all team members are added as 'developer'.  
-1. Maintainers & developers can merge into MAIN.  
-1. Only maintainers can push & merge into MAIN however.  For code quality purposes, then, elect 1-2 team members to act be assigned as a maintainer.
-1. **Push constraints require the commit author's email be from miamioh.edu.** Make sure you are using the correct credentials in your IDE (like VS Code) or in your repository manager, like [GitHub Desktop](https://docs.github.com/en/desktop). 
+## Tooling & Commands
 
-## Merge Constraints
-The projects are setup with some merge constraints.
-1. All merge requests (MR), regardless of branch, require at least one (1) approval.
-1. MRs cannot be approved by the MR author.
-1. MRs cannot be approved by a user how has contributed a commit to the MR.
+| Context | Command | Description |
+| ------- | ------- | ----------- |
+| Root | `npm run benchmark` | Build backend + frontend, run Playwright benchmark headlessly. |
+| Root | `npm run benchmark:headed` | Same as above but displays the Chromium window. |
+| Backend | `npm --prefix backend run dev` | Start API with hot reload (`tsx watch`). |
+| Backend | `npm --prefix backend run build` | Compile TypeScript into `build/`. |
+| Backend | `npm --prefix backend run start` | Serve compiled backend. |
+| Frontend | `npm --prefix frontend run dev` | Launch combined dev environment (frontend + backend). |
+| Frontend | `npm --prefix frontend run build` | Type-check and produce production bundle. |
+| Frontend | `npm --prefix frontend run preview` | Serve the built frontend for validation. |
 
- 
-# ESTIMATING & TIME TRACKING
+## Documentation
 
-**Time tracking is NOT required.**  It's very simple though.  There are other useful quick actions like /done, /assign, /approve and /wip to name a few.
+- `ARCHITECTURE.md` – System architecture, diagrams, and data flows.
+- `backend/README.md` – Backend scripts, environment variables, and API surface.
+- `frontend/README.md` – Frontend capabilities, tech stack, and troubleshooting.
+- `Attachments/` – Supporting materials, design artifacts, and historical context.
 
-| cmd | purpose |
-| ------ | ------ |
-| /estimate | in the issue description, document the initial work estimate in days, hours, or minutes |
-| /spend | in the comments for the issue, indicate how much time you spend working at that time | 
+## Data Storage
 
-Here's the link to [Quick Actions](https://docs.gitlab.com/ee/user/project/quick_actions.html).  
+The backend persists data under `backend/storage/` by default:
+
+- `storage/projects.json` – Project metadata and workflow phases.
+- `storage/datasets/metadata.json` – Dataset profiles (schema, inferred types, sample).
+- `storage/datasets/files/<datasetId>/<filename>` – Raw dataset binaries.
+
+Override these locations via environment variables (`STORAGE_PATH`, `DATASET_METADATA_PATH`, `DATASET_STORAGE_DIR`).
+
+## Support
+
+- Issues and enhancements are tracked through the team’s Git hosting platform.
+- For urgent runtime incidents, contact the current backend or frontend owner within the capstone team.
+
+## License
+
+To be determined (internal project).
