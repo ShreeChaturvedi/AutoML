@@ -12,7 +12,7 @@
  */
 
 import { create } from 'zustand';
-import type { UploadedFile, DataPreview, QueryArtifact, QueryMode } from '@/types/file';
+import type { UploadedFile, DataPreview, QueryArtifact, QueryMode, FileMetadata } from '@/types/file';
 
 interface DataState {
   files: UploadedFile[];
@@ -37,6 +37,7 @@ interface DataState {
   getPreviewByFileId: (fileId: string) => DataPreview | undefined;
   setProcessing: (processing: boolean) => void;
   clearProjectData: (projectId: string) => void;
+  setFileMetadata: (fileId: string, metadata: Partial<FileMetadata>) => void;
 
   // Query artifact actions
   createArtifact: (query: string, mode: QueryMode, result: DataPreview, projectId: string, customName?: string) => string;
@@ -107,6 +108,22 @@ export const useDataStore = create<DataState>((set, get) => ({
     set((state) => ({
       files: state.files.filter((f) => f.projectId !== projectId),
       previews: state.previews.filter((p) => !fileIdsToRemove.includes(p.fileId))
+    }));
+  },
+
+  setFileMetadata: (fileId: string, metadata: Partial<FileMetadata>) => {
+    set((state) => ({
+      files: state.files.map((file) =>
+        file.id === fileId
+          ? {
+              ...file,
+              metadata: {
+                ...(file.metadata ?? {}),
+                ...metadata
+              }
+            }
+          : file
+      )
     }));
   },
   
