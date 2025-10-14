@@ -30,10 +30,8 @@ import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
 import { X, FileText, FileJson, FileSpreadsheet, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDataStore } from '@/stores/dataStore';
-import { useProjectStore } from '@/stores/projectStore';
 import { cn } from '@/lib/utils';
 import { useMemo, useState, useEffect } from 'react';
-import type { UploadedFile, QueryArtifact } from '@/types/file';
 
 // Combined tab type
 type FileTab = {
@@ -140,12 +138,10 @@ interface FileTabBarProps {
 }
 
 export function FileTabBar({ projectId }: FileTabBarProps) {
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const allFiles = useDataStore((state) => state.files);
   const allPreviews = useDataStore((state) => state.previews);
   const allArtifacts = useDataStore((state) => state.queryArtifacts);
   const activeFileTabId = useDataStore((state) => state.activeFileTabId);
-  const fileTabType = useDataStore((state) => state.fileTabType);
   const setActiveFileTab = useDataStore((state) => state.setActiveFileTab);
   const removeFile = useDataStore((state) => state.removeFile);
   const removeArtifact = useDataStore((state) => state.removeArtifact);
