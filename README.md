@@ -11,6 +11,22 @@
 
 - [[Charter|Project documentation/Charter]]
 
+## Automated Benchmark
+
+From the repository root you can execute the end-to-end benchmark that spins up both backend and frontend, then drives the UI with Playwright:
+
+```bash
+npm run benchmark
+```
+
+> Tip: run `npm --prefix testing install` once to install the Playwright dependencies before your first benchmark.
+
+To watch the run in a real browser window, use:
+
+```bash
+npm run benchmark:headed
+```
+
 
 # REFERENCES
 Read the following articles to familiarize yourself with Gitlab and how you will be expected to use it during your project.
@@ -54,5 +70,3 @@ The projects are setup with some merge constraints.
 | /spend | in the comments for the issue, indicate how much time you spend working at that time | 
 
 Here's the link to [Quick Actions](https://docs.gitlab.com/ee/user/project/quick_actions.html).  
-
-
