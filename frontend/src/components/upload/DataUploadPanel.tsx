@@ -19,7 +19,7 @@
  * TODO: Backend integration for file storage
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, Database, FileStack } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +33,7 @@ import type { UploadedFile } from '@/types/file';
 import { getFileType } from '@/types/file';
 import { FileCard } from './FileCard';
 import Papa from 'papaparse';
+import { uploadDatasetFile } from '@/lib/api/datasets';
 
 // Accepted file types (data files and context documents only - NO images)
 const acceptedFileTypes = {
@@ -57,8 +58,11 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isParsingFiles, setIsParsingFiles] = useState(false);
   const addFile = useDataStore((state) => state.addFile);
+  const setFileMetadata = useDataStore((state) => state.setFileMetadata);
   const projects = useProjectStore((state) => state.projects);
   const project = projects.find(p => p.id === projectId);
+  const [datasetUploadStatus, setDatasetUploadStatus] = useState<Record<string, 'uploading' | 'uploaded' | 'error'>>({});
+  const [datasetUploadErrors, setDatasetUploadErrors] = useState<Record<string, string>>({});
 
   const onDrop = (acceptedFiles: File[]) => {
     const newFiles: UploadedFile[] = acceptedFiles.map((file) => ({
@@ -73,6 +77,12 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
 
     setUploadedFiles((prev) => [...prev, ...newFiles]);
     newFiles.forEach((file) => addFile(file));
+
+    newFiles
+      .filter((file) => ['csv', 'json', 'excel'].includes(file.type))
+      .forEach((file) => {
+        void uploadDatasetToBackend(file);
+      });
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -84,7 +94,53 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
   const handleRemoveFile = (fileId: string) => {
     setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
     useDataStore.getState().removeFile(fileId);
+    setDatasetUploadStatus((prev) => {
+      const next = { ...prev };
+      delete next[fileId];
+      return next;
+    });
+    setDatasetUploadErrors((prev) => {
+      const next = { ...prev };
+      delete next[fileId];
+      return next;
+    });
   };
+
+  const uploadDatasetToBackend = useCallback(
+    async (file: UploadedFile) => {
+      setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'uploading' }));
+      setDatasetUploadErrors((prev) => {
+        const next = { ...prev };
+        delete next[file.id];
+        return next;
+      });
+
+      try {
+        const response = await uploadDatasetFile(file.file, projectId);
+        const dataset = response.dataset;
+
+        setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'uploaded' }));
+        setFileMetadata(file.id, {
+          datasetId: dataset.datasetId,
+          rowCount: dataset.n_rows,
+          columnCount: dataset.n_cols,
+          columns: dataset.columns,
+          datasetProfile: {
+            nRows: dataset.n_rows,
+            nCols: dataset.n_cols,
+            dtypes: dataset.dtypes,
+            nullCounts: dataset.null_counts
+          }
+        });
+      } catch (error) {
+        console.error(`Failed to sync ${file.name} with backend`, error);
+        setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'error' }));
+        const message = error instanceof Error ? error.message : 'Failed to upload dataset';
+        setDatasetUploadErrors((prev) => ({ ...prev, [file.id]: message }));
+      }
+    },
+    [projectId, setFileMetadata]
+  );
 
   // Automatically parse CSV files when uploaded
   useEffect(() => {
@@ -173,9 +229,10 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
   // Count file types
   const dataFiles = uploadedFiles.filter(f => ['csv', 'json', 'excel'].includes(f.type));
   const contextFiles = uploadedFiles.filter(f => ['pdf', 'other'].includes(f.type));
+  const isUploadingDatasets = Object.values(datasetUploadStatus).some((status) => status === 'uploading');
 
   return (
-    <Card className="h-full flex flex-col border-0 shadow-none">
+    <Card data-testid="data-upload-panel" className="h-full flex flex-col border-0 shadow-none">
       <CardHeader className="space-y-2">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
@@ -189,16 +246,16 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
               </CardDescription>
             </div>
           </div>
-          {uploadedFiles.length > 0 && !isParsingFiles && (
+          {uploadedFiles.length > 0 && !isParsingFiles && !isUploadingDatasets && (
             <ContinueButton
               currentPhase="upload"
               projectId={projectId}
               disabled={false}
             />
           )}
-          {isParsingFiles && (
+          {(isParsingFiles || isUploadingDatasets) && (
             <Badge variant="secondary" className="text-xs">
-              Parsing files...
+              {isUploadingDatasets ? 'Syncing datasets with backend...' : 'Parsing files...'}
             </Badge>
           )}
         </div>
@@ -275,7 +332,13 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
             <div className="flex-1 overflow-y-auto scrollbar-hide">
               <div className="grid grid-cols-1 gap-3">
                 {uploadedFiles.map((file) => (
-                  <FileCard key={file.id} file={file} onRemove={handleRemoveFile} />
+                  <FileCard
+                    key={file.id}
+                    file={file}
+                    onRemove={handleRemoveFile}
+                    status={datasetUploadStatus[file.id]}
+                    errorMessage={datasetUploadErrors[file.id]}
+                  />
                 ))}
               </div>
             </div>
