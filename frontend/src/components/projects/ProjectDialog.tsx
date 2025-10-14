@@ -93,6 +93,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const createProject = useProjectStore((state) => state.createProject);
   const updateProject = useProjectStore((state) => state.updateProject);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const isEditMode = !!project;
 
@@ -122,19 +123,27 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         icon: project?.icon || 'Folder',
         color: project?.color || 'blue'
       });
+      setFormError(null);
+      setIsIconPickerOpen(false);
     }
   }, [open, project, reset]);
 
   const selectedIcon = watch('icon');
   const selectedColor = watch('color');
 
-  const onSubmit = (data: ProjectFormValues) => {
-    if (isEditMode && project) {
-      updateProject(project.id, data);
-    } else {
-      createProject(data);
+  const onSubmit = async (data: ProjectFormValues) => {
+    setFormError(null);
+
+    try {
+      if (isEditMode && project) {
+        await updateProject(project.id, data);
+      } else {
+        await createProject(data);
+      }
+      onOpenChange(false);
+    } catch {
+      setFormError('Unable to save project. Please try again.');
     }
-    onOpenChange(false);
   };
 
   // Get preview icon component
@@ -200,6 +209,10 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
               <p className="text-xs text-destructive">{errors.description.message}</p>
             )}
           </div>
+
+          {formError && (
+            <p className="text-xs text-destructive">{formError}</p>
+          )}
 
           {/* Color Picker */}
           <div className="space-y-2">
