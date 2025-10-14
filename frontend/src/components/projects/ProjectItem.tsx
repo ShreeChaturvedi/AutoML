@@ -38,6 +38,7 @@ export function ProjectItem({ project }: ProjectItemProps) {
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const setActiveProject = useProjectStore((state) => state.setActiveProject);
   const deleteProject = useProjectStore((state) => state.deleteProject);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isActive = activeProjectId === project.id;
   const colorClasses = projectColorClasses[project.color];
@@ -47,8 +48,16 @@ export function ProjectItem({ project }: ProjectItemProps) {
     project.icon
   ];
 
-  const handleDelete = () => {
-    deleteProject(project.id);
+  const handleDelete = async () => {
+    if (isDeleting) return;
+    try {
+      setIsDeleting(true);
+      await deleteProject(project.id);
+    } catch (error) {
+      console.error('Failed to delete project', error);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleProjectClick = () => {
@@ -60,6 +69,7 @@ export function ProjectItem({ project }: ProjectItemProps) {
   return (
     <>
       <div
+        data-testid={`project-item-${project.id}`}
         className={cn(
           'group flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors',
           isActive
@@ -110,7 +120,7 @@ export function ProjectItem({ project }: ProjectItemProps) {
             <DropdownMenuItem
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
-                handleDelete();
+                void handleDelete();
               }}
               className="text-destructive focus:text-destructive"
             >
