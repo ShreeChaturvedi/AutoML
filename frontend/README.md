@@ -14,7 +14,10 @@ Production-grade React frontend for the AI-Augmented AutoML platform. Built with
 # Install dependencies
 npm install
 
-# Start development server
+# Configure API base URL (optional)
+cp .env.example .env.local
+
+# Start development servers (frontend + backend)
 npm run dev
 
 # Build for production
@@ -22,10 +25,17 @@ npm run build
 
 # Preview production build
 npm run preview
+
+# Run automated benchmark (run from repo root after `npm --prefix testing install`)
+npm run benchmark
 ```
 
+`npm run benchmark` (executed from the repository root) builds both workspaces, starts the compiled backend on port 4000, launches the production preview on port 4173, and drives an end-to-end Playwright scenario that creates a project and uploads a dataset. Use `npm run benchmark:headed` to watch the run in a browser window.
+
 ### Development Server
-The dev server runs at `http://localhost:5173/`
+`npm run dev` uses `concurrently` to launch the Express backend (`http://localhost:4000/`) and the Vite frontend (`http://localhost:5173/`) in the same terminal. Logs from both processes are prefixed so you can see API requests alongside frontend output.
+
+Need only the frontend? Use `npm run dev:ui` to launch Vite without starting the backend.
 
 ## 🎯 Current State (September 30, 2025)
 
@@ -82,8 +92,9 @@ See [documentation/decisions/ADR-001-tech-stack.md](./documentation/decisions/AD
 ### Only seeing a blue background?
 1. Open browser console (F12) - check for JavaScript errors
 2. Hard refresh: `Cmd+Shift+R` (Mac) or `Ctrl+Shift+R` (Windows)
-3. Verify dev server is running: `npm run dev`
-4. Check you're at `http://localhost:5173/`
+3. Verify the combined dev server is running: `npm run dev`
+4. Confirm the backend logs show `Server listening on http://localhost:4000`
+5. Check you're at `http://localhost:5173/`
 
 ### Build issues?
 ```bash
