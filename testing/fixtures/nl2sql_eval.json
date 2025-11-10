@@ -1,0 +1,17 @@
+[
+  {
+    "prompt": "List all projects",
+    "expectedSql": "SELECT * FROM projects LIMIT 50",
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "prompt": "Show me the datasets table",
+    "expectedSql": "SELECT * FROM datasets LIMIT 50",
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "prompt": "Display documents",
+    "expectedSql": "SELECT * FROM documents LIMIT 50",
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  }
+]
