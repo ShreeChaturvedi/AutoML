@@ -1,0 +1,12 @@
+[
+  {
+    "question": "What does the AutoML project require?",
+    "expectedPhrases": ["data upload", "exploration"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "Which sprint covers retrieval augmented generation?",
+    "expectedPhrases": ["sprint four"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  }
+]
