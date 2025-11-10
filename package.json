@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "benchmark": "npm --prefix testing run benchmark",
-    "benchmark:headed": "npm --prefix testing run benchmark:headed"
+    "benchmark:headed": "npm --prefix testing run benchmark:headed",
+    "eval": "npm --prefix testing run eval"
   }
 }
