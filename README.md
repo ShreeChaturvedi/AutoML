@@ -1,3 +1,4 @@
+<<<<<<< README.md
 # AI-Augmented AutoML Toolchain
 
 Modern AutoML workspace combining a TypeScript/Express API, a React data science UI, and an end-to-end Playwright benchmark. Built and maintained by the CSE 448 capstone team.
