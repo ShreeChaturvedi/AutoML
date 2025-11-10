@@ -1,4 +1,4 @@
-# Sprint 3–4 Backend Handoff (Person 1)
+# Sprint 3–4 Backend Handoff (Ayush)
 
 This note summarizes what’s been delivered on the backend so far and what teammates should do next for their tracks.
 
