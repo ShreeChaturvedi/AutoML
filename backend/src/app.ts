@@ -5,9 +5,12 @@ import morgan from 'morgan';
 import { env } from './config.js';
 import { createDatasetRepository } from './repositories/datasetRepository.js';
 import { createProjectRepository } from './repositories/projectRepository.js';
+import { createAnswerRouter } from './routes/answer.js';
 import { createDatasetUploadRouter } from './routes/datasets.js';
+import { createDocumentRouter } from './routes/documents.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerProjectRoutes } from './routes/projects.js';
+import { createQueryRouter } from './routes/query.js';
 
 export function createApp() {
   const app = express();
@@ -29,6 +32,9 @@ export function createApp() {
   registerHealthRoutes(router);
   registerProjectRoutes(router, projectRepository);
   router.use(createDatasetUploadRouter(datasetRepository));
+  router.use(createDocumentRouter());
+  router.use(createQueryRouter());
+  router.use(createAnswerRouter());
 
   app.use('/api', router);
 
