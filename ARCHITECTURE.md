@@ -52,11 +52,18 @@ graph TD
 - **Routes**:
   - `backend/src/routes/projects.ts` – CRUD + metadata sync for AutoML projects.
   - `backend/src/routes/datasets.ts` – Dataset upload, profiling, and listing.
+  - `backend/src/routes/documents.ts` – Context document ingestion (`/upload/doc`) and retrieval (`/docs/search`).
+  - `backend/src/routes/answer.ts` – `/api/answer` endpoint composing responses with citations and cache metadata.
   - `backend/src/routes/health.ts` – Liveness diagnostics (`/api/health`).
+  - `backend/src/routes/query.ts` – NL→SQL, direct SQL, and cache config endpoints.
 - **Persistence & services**:
   - `backend/src/repositories/projectRepository.ts` – File-backed project store with schema sanitization and in-memory fallback.
   - `backend/src/repositories/datasetRepository.ts` – File-backed dataset metadata store with UUID identities.
   - `backend/src/services/datasetProfiler.ts` – CSV/JSON/XLSX parsing, column inference, and sampling logic leveraged during uploads.
+  - `backend/src/services/documentParser.ts`, `textChunker.ts`, `embeddingService.ts` – Pipeline for parsing PDFs/Markdown, chunking with overlap, and generating lightweight embeddings for retrieval.
+  - `backend/src/services/documentIngestion.ts`, `documentSearchService.ts` – Persist documents/chunks/embeddings to Postgres and run cosine + keyword reranking for `/api/docs/search`.
+  - `backend/src/services/sqlExecutor.ts`, `queryCache.ts`, `nlToSql.ts` – Sprint 3 query execution stack (read-only enforcement, caching, NL→SQL stubs, EDA summaries).
+  - `backend/src/services/answerService.ts` – Retrieves top chunks, composes simple answers with citation metadata, and caches responses in-memory for `/api/answer`.
 - **Configuration**: `backend/src/config.ts` consolidates environment variables (port, CORS origins, storage paths). Defaults assume local single-node development.
 
 ### 3.3 Automation & Quality Gates
@@ -79,6 +86,16 @@ graph TD
 
 Paths are relative to the backend workspace and may be overridden using environment variables.
 
+### 4.2 Postgres Schema (Sprint 3+)
+
+Upcoming query, caching, and retrieval features persist operational data in Postgres. The initial migration (`backend/migrations/001_init.sql`) provisions:
+
+- `projects`, `datasets`, `documents`, `chunks`, `embeddings` – relational mirrors of the JSON stores plus document chunk metadata used for RAG.
+- `query_results` – audit log of executed SQL (text, latency, preview payloads).
+- `query_cache` – normalized SQL hash per project, cached preview/result metadata, TTL timestamps for eviction.
+
+`npm --prefix backend run db:migrate` executes these migrations once `DATABASE_URL` is configured.
+
 ### 4.2 Environment Variables
 
 | Variable | Default | Purpose |
@@ -88,6 +105,13 @@ Paths are relative to the backend workspace and may be overridden using environm
 | `STORAGE_PATH` | `storage/projects.json` | Project persistence location. |
 | `DATASET_METADATA_PATH` | `storage/datasets/metadata.json` | Dataset profile store. |
 | `DATASET_STORAGE_DIR` | `storage/datasets/files` | Directory to persist uploaded binaries. |
+| `DOCUMENT_STORAGE_DIR` | `storage/documents/files` | Directory to persist uploaded context documents. |
+| `DATABASE_URL` | _unset_ | Optional Postgres connection string for query/RAG services. |
+| `PGSSLMODE` | `disable` | Controls TLS requirements when connecting to managed Postgres. |
+| `PG_POOL_MIN`/`PG_POOL_MAX` | `0` / `10` | Pool sizing hints for the `pg` client. |
+| `SQL_STATEMENT_TIMEOUT_MS`, `SQL_MAX_ROWS`, `SQL_DEFAULT_LIMIT` | `5000`, `1000`, `200` | Query execution guardrails. |
+| `QUERY_CACHE_TTL_MS`, `QUERY_CACHE_MAX_ENTRIES` | `300000`, `500` | Cache configuration for NL→SQL/SQL endpoints. |
+| `DOC_CHUNK_SIZE`, `DOC_CHUNK_OVERLAP` | `500`, `50` | Window/overlap used when chunking uploaded documents. |
 
 Configuration is loaded once at process start (see `backend/src/config.ts`); copy `backend/.env.example` to `.env` to customize.
 
@@ -106,6 +130,18 @@ Configuration is loaded once at process start (see `backend/src/config.ts`); cop
 2. Backend detects file type, parses the payload via `datasetProfiler`, and builds a profile containing row counts, sampled rows, and column metadata.
 3. Profile is persisted to `datasetRepository`; raw file is written to the dataset storage directory.
 4. Response payload returns the normalized dataset profile, and the frontend stores it inside `dataStore` for display in the data viewer.
+
+### 5.3 Document Ingestion & Retrieval
+
+1. Context uploads (`POST /api/upload/doc`) send PDFs/Markdown/TXT with optional `projectId`.
+2. Backend persists the binary under `DOCUMENT_STORAGE_DIR/<documentId>/`, extracts text (PDF parsing when applicable), chunks it using `DOC_CHUNK_SIZE`/`DOC_CHUNK_OVERLAP`, and writes chunk metadata + embeddings to Postgres (`documents`, `chunks`, `embeddings` tables).
+3. Retrieval requests (`GET /api/docs/search?q=...&projectId=...&k=...`) compute a lightweight embedding for the query, score stored chunks via cosine similarity, apply a keyword-based reranker, and return the top-k chunks with scores, span offsets, and snippets so the frontend can render “Docs cited” panels or feed downstream answer generation.
+
+### 5.4 Answer Composition
+
+1. Frontend calls `POST /api/answer` with `{ projectId?, question, topK? }`.
+2. Backend reuses the retrieval pipeline to fetch top chunks, composes a concise answer by stitching leading snippets, attaches citation metadata (`chunkId`, `documentId`, span offsets), and returns the payload along with latency/cache diagnostics.
+3. Responses are cached in-memory for `ANSWER_CACHE_TTL_MS` to keep repeated questions fast and to expose cache-hit metrics to the UI/evaluation suite.
 
 ## 6. Development Workflow
 
