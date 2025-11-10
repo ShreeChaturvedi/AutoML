@@ -7,9 +7,14 @@
     "prebenchmark": "npm --prefix ../backend run build && npm --prefix ../frontend run build && npx playwright install --with-deps chromium",
     "benchmark": "playwright test",
     "prebenchmark:headed": "npm --prefix ../backend run build && npm --prefix ../frontend run build && npx playwright install --with-deps chromium",
-    "benchmark:headed": "playwright test --headed"
+    "benchmark:headed": "playwright test --headed",
+    "eval": "tsx tests/evalRunner.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "tsx": "^4.20.6"
   }
 }
