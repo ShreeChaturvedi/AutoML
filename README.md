@@ -123,6 +123,7 @@ ai-augmented-auto-ml-toolchain/
 - `ARCHITECTURE.md` – System architecture, diagrams, and data flows.
 - `backend/README.md` – Backend scripts, environment variables, and API surface.
 - `frontend/README.md` – Frontend capabilities, tech stack, and troubleshooting.
+- `docs/api-contracts.md` – Shared request/response contracts for Sprint 3/4 endpoints (query, document ingestion, answering).
 - `Attachments/` – Supporting materials, design artifacts, and historical context.
 
 ## Data Storage
