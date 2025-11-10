@@ -8,9 +8,9 @@ This document provides an engineering-level view of the AI-Augmented AutoML Tool
 
 ### 2.1 Solution Summary
 
-- **Frontend (`frontend/`)** – Vite + React SPA responsible for the AutoML user experience, including project orchestration, dataset upload, and data exploration.
-- **Backend (`backend/`)** – Express + TypeScript API that exposes REST endpoints for project management, dataset ingestion, profiling, and storage.
-- **Benchmarking (`testing/`)** – Playwright suite that exercises the compiled stack, ensuring critical flows (project creation, dataset upload) remain functional.
+- **Frontend (`frontend/`)** – Vite + React SPA responsible for the AutoML user experience: project orchestration, dataset/document upload, query execution UI, and answer presentation.
+- **Backend (`backend/`)** – Express + TypeScript API exposing REST endpoints for project CRUD, dataset profiling, Postgres-backed SQL services, document retrieval, and answer composition.
+- **Benchmarking & Evaluation (`testing/`)** – Playwright suite for regression tests plus a TypeScript eval runner that validates NL→SQL and RAG endpoints against fixtures.
 
 All workspaces live in a single monorepo. Shared tooling commands are defined at the repository root and delegate to workspace-specific scripts via `npm --prefix`.
 
@@ -30,6 +30,7 @@ graph TD
 
 - API defaults to `http://localhost:4000/api` and can be hosted independently of the SPA.
 - Frontend dev server runs at `http://localhost:5173` and proxies API calls to the backend.
+- Postgres typically runs via Docker on host port `5433`; the backend connects using `DATABASE_URL`.
 - Playwright benchmark spins up the compiled backend, serves the production frontend preview, and uses headless Chromium.
 
 ## 3. Component Architecture
@@ -71,8 +72,12 @@ graph TD
 - `testing/` workspace contains:
   - `playwright.config.ts` – Launch parameters for the benchmark run.
   - `tests/benchmark.spec.ts` – Canonical end-to-end scenario covering project creation and dataset ingestion.
+  - `tests/evalRunner.ts` – NL→SQL + RAG evaluation harness backed by fixtures (`testing/fixtures/*.json`). Run with `EVAL_API_BASE=http://localhost:4000/api npm --prefix testing run eval`.
   - `helpers.ts` and `fixtures/` – Shared utilities and sample data files.
-- Repository root scripts (`npm run benchmark`, `npm run benchmark:headed`) orchestrate builds, dependency installation, and test execution.
+- Repository root scripts orchestrate builds and tests:
+  - `npm run benchmark` / `npm run benchmark:headed` – Build both workspaces and execute Playwright runs.
+  - `npm run eval` – Convenience alias for the evaluation suite.
+  - CI (`.github/workflows/ci.yml`) spins up Postgres, runs migrations, seeds a project, starts the backend, and executes the eval runner on every push/PR.
 
 ## 4. Data & Configuration
 
@@ -84,7 +89,7 @@ graph TD
 | `storage/datasets/metadata.json` | Dataset profiles (schema, sample, stats). | Updated per upload and on dataset mutations. |
 | `storage/datasets/files/<datasetId>/<filename>` | Raw uploaded dataset binaries. | Stored exactly as received for future processing. |
 
-Paths are relative to the backend workspace and may be overridden using environment variables.
+Paths are relative to the backend workspace and may be overridden using environment variables. Postgres holds operational data for Sprint 3/4 features; use `DATABASE_URL` + `npm --prefix backend run db:migrate` to keep the schema current.
 
 ### 4.2 Postgres Schema (Sprint 3+)
 
@@ -145,10 +150,12 @@ Configuration is loaded once at process start (see `backend/src/config.ts`); cop
 
 ## 6. Development Workflow
 
-1. **Install dependencies** – `npm --prefix backend install`, `npm --prefix frontend install`, and `npm --prefix testing install` (for benchmarks).
-2. **Run locally** – `npm --prefix frontend run dev` to boot both backend and frontend with live reload.
-3. **Validate changes** – `npm run benchmark` executes the end-to-end Playwright suite against compiled artifacts.
-4. **Update infrastructure** – Adjust `.env`, storage paths, or deployment manifests as required for non-local environments.
+1. **Install dependencies** – `npm --prefix backend install`, `npm --prefix frontend install`, and `npm --prefix testing install`.
+2. **Configure Postgres** – Start a local instance (Docker `postgres:16` recommended) and set `DATABASE_URL`.
+3. **Apply migrations** – `npm --prefix backend run db:migrate` (safe to re-run).
+4. **Run locally** – `npm --prefix frontend run dev` or `npm --prefix backend run dev` to boot the stack in watch mode.
+5. **Validate changes** – `npm run benchmark` / `npm run benchmark:headed` for E2E flows, and `npm run eval` (with `EVAL_API_BASE`) for NL→SQL + RAG metrics.
+6. **Update infrastructure/docs** – Adjust `.env`, storage paths, Postgres credentials, and documentation as features evolve.
 
 ## Appendix A – Repository Reference
 

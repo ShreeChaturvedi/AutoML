@@ -1,7 +1,7 @@
 <<<<<<< README.md
 # AI-Augmented AutoML Toolchain
 
-Modern AutoML workspace combining a TypeScript/Express API, a React data science UI, and an end-to-end Playwright benchmark. Built and maintained by the CSE 448 capstone team.
+Modern AutoML workspace combining a TypeScript/Express API, a React data science UI, and an end-to-end Playwright benchmark. Built and maintained by the CSE 448 capstone team, the stack now includes a Postgres-backed query engine, document retrieval, and answer composition services.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -21,7 +21,7 @@ Modern AutoML workspace combining a TypeScript/Express API, a React data science
 
 ## Overview
 
-The AI-Augmented AutoML Toolchain streamlines dataset ingestion, exploratory analysis, and model workflow orchestration. The solution ships as a monorepo with three coordinated workspaces:
+The AI-Augmented AutoML Toolchain streamlines dataset ingestion, exploratory analysis, retrieval-augmented answering, and model workflow orchestration. The solution ships as a monorepo with three coordinated workspaces:
 
 1. `backend/` – Express + TypeScript API exposing project management and dataset profiling endpoints.
 2. `frontend/` – Vite + React SPA delivering the AutoML user experience.
@@ -33,6 +33,8 @@ Refer to `ARCHITECTURE.md` for a detailed system design and interaction diagram.
 
 - Project lifecycle management with persisted metadata and workflow phase tracking.
 - Dataset ingestion pipeline with CSV/JSON/XLSX profiling, schema inference, and sample extraction.
+- Postgres-backed query services (direct SQL + NL→SQL) with caching, quick EDA summaries, and answer composition with citations.
+- Document ingestion and search (PDF/Markdown/TXT) for retrieval-augmented use cases.
 - Rich client UI with drag-and-drop uploads, tabbed data viewer, and Tailwind + shadcn component system.
 - Unified developer command (`npm --prefix frontend run dev`) that launches both frontend and backend in watch mode.
 - Automated Playwright benchmark (`npm run benchmark`) that builds both workspaces and verifies end-to-end flows.
@@ -62,17 +64,25 @@ npm --prefix testing install   # required for automated benchmark
    ```bash
    cp backend/.env.example backend/.env
    ```
-2. Update values such as `PORT`, `ALLOWED_ORIGINS`, and storage paths as needed (see `backend/src/config.ts`).
+2. Point `DATABASE_URL` at your Postgres instance. When using Docker locally, a common command is:
+   ```bash
+   docker run --rm -d --name automl-pg \
+     -e POSTGRES_PASSWORD=postgres \
+     -e POSTGRES_DB=automl \
+     -p 5433:5432 postgres:16
+   ```
+   Then set `DATABASE_URL=postgres://postgres:postgres@localhost:5433/automl`.
+3. Update other values such as `PORT`, `ALLOWED_ORIGINS`, storage paths, and caching limits as needed (see `backend/src/config.ts`).
 
 ### Apply Database Migrations
 
-The new query/document/answering services expect Postgres tables. Once `DATABASE_URL` in `backend/.env` points at a running Postgres instance (e.g., Docker container on port `5433`), run:
+The new query/document/answering services expect Postgres tables. Once `DATABASE_URL` points at a running instance, run:
 
 ```bash
 npm --prefix backend run db:migrate
 ```
 
-This creates the required tables (`projects`, `datasets`, `documents`, `chunks`, `embeddings`, `query_cache`, etc.). Re-run the command whenever new migrations are added. After that you can seed data via the API (curl commands in `docs/person1-progress.md`) and browse it with any Postgres GUI.
+This creates the required tables (`projects`, `datasets`, `documents`, `chunks`, `embeddings`, `query_cache`, etc.). Re-run the command whenever new migrations are added. After migration you can seed data via curl (examples in `docs/person1-progress.md`) and browse it in TablePlus/psql.
 
 ### Run the Stack
 
@@ -85,8 +95,10 @@ The command above launches:
 - Vite dev server at `http://localhost:5173`
 
 Run the workspaces individually when required:
-- `npm --prefix backend run dev` – backend only
+- `npm --prefix backend run dev` – backend only (requires Postgres running + migrations applied)
 - `npm --prefix frontend run dev:ui` – frontend only
+
+After the backend is up, seed some data by calling the APIs (project creation, `/api/upload/doc`, `/api/query/sql`, `/api/answer`). The curl snippets in `docs/person1-progress.md` double as smoke tests.
 
 ## Development Workflow
 
@@ -94,8 +106,10 @@ Run the workspaces individually when required:
 2. **Lint/Test** – Execute local checks:
    - `npm --prefix backend run lint`
    - `npm --prefix frontend run lint`
-3. **Validate End-to-End** – `npm run benchmark` (headless) or `npm run benchmark:headed` (with browser UI).
-4. **Review** – Ensure docs and type definitions are updated before submitting changes.
+3. **Run migrations** – `npm --prefix backend run db:migrate` any time the schema changes (safe to run multiple times).
+4. **Validate End-to-End** – `npm run benchmark` (headless) or `npm run benchmark:headed` (with browser UI).
+5. **Run the evaluation suite** – with the backend running, execute `EVAL_API_BASE=http://localhost:4000/api npm --prefix testing run eval` to verify NL→SQL/RAG metrics.
+6. **Review** – Ensure docs and type definitions are updated before submitting changes.
 
 ## Repository Structure
 
