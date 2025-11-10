@@ -64,6 +64,16 @@ npm --prefix testing install   # required for automated benchmark
    ```
 2. Update values such as `PORT`, `ALLOWED_ORIGINS`, and storage paths as needed (see `backend/src/config.ts`).
 
+### Apply Database Migrations
+
+The new query/document/answering services expect Postgres tables. Once `DATABASE_URL` in `backend/.env` points at a running Postgres instance (e.g., Docker container on port `5433`), run:
+
+```bash
+npm --prefix backend run db:migrate
+```
+
+This creates the required tables (`projects`, `datasets`, `documents`, `chunks`, `embeddings`, `query_cache`, etc.). Re-run the command whenever new migrations are added. After that you can seed data via the API (curl commands in `docs/person1-progress.md`) and browse it with any Postgres GUI.
+
 ### Run the Stack
 
 ```bash
@@ -128,13 +138,14 @@ ai-augmented-auto-ml-toolchain/
 
 ## Data Storage
 
-The backend persists data under `backend/storage/` by default:
+The backend persists core JSON artifacts under `backend/storage/`, and Postgres stores all Sprint 3/4 features (projects, datasets, documents, embeddings, caches):
 
 - `storage/projects.json` – Project metadata and workflow phases.
 - `storage/datasets/metadata.json` – Dataset profiles (schema, inferred types, sample).
 - `storage/datasets/files/<datasetId>/<filename>` – Raw dataset binaries.
 
 Override these locations via environment variables (`STORAGE_PATH`, `DATASET_METADATA_PATH`, `DATASET_STORAGE_DIR`).
+For Postgres-backed features, configure `DATABASE_URL` and run migrations (`npm --prefix backend run db:migrate`).
 
 ## Support
 
