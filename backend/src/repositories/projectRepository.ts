@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 
 import { z } from 'zod';
 
-import type { CreateProjectInput, Project } from '../types/project.js';
+import type { CreateProjectInput, Project, ProjectMetadata, PhaseValue } from '../types/project.js';
 
 export interface ProjectRepository {
   list(): Project[];
@@ -12,6 +12,7 @@ export interface ProjectRepository {
   create(input: CreateProjectInput): Project;
   update(id: string, input: Partial<CreateProjectInput>): Project | undefined;
   delete(id: string): boolean;
+  clear(): void;
 }
 
 export class InMemoryProjectRepository implements ProjectRepository {
@@ -40,7 +41,8 @@ export class InMemoryProjectRepository implements ProjectRepository {
       icon: input.icon ?? 'folder-closed',
       color: input.color ?? 'blue',
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      metadata: sanitizeMetadata(input.metadata)
     };
 
     this.projects.set(project.id, project);
@@ -54,6 +56,7 @@ export class InMemoryProjectRepository implements ProjectRepository {
     const updated: Project = {
       ...existing,
       ...input,
+      metadata: sanitizeMetadata({ ...existing.metadata, ...input.metadata }),
       updatedAt: new Date().toISOString()
     };
 
@@ -64,7 +67,34 @@ export class InMemoryProjectRepository implements ProjectRepository {
   delete(id: string): boolean {
     return this.projects.delete(id);
   }
+
+  clear(): void {
+    this.projects.clear();
+  }
 }
+
+export const PHASE_VALUES = [
+  'upload',
+  'data-viewer',
+  'preprocessing',
+  'feature-engineering',
+  'training',
+  'experiments',
+  'deployment',
+  'chat'
+] as const satisfies readonly PhaseValue[];
+
+const phaseSchema = z.enum(PHASE_VALUES);
+
+const metadataSchema = z
+  .object({
+    unlockedPhases: z.array(phaseSchema).optional(),
+    completedPhases: z.array(phaseSchema).optional(),
+    currentPhase: phaseSchema.optional(),
+    customInstructions: z.string().max(5000).optional()
+  })
+  .catchall(z.unknown())
+  .optional();
 
 const storedProjectSchema = z.object({
   id: z.string(),
@@ -73,7 +103,8 @@ const storedProjectSchema = z.object({
   icon: z.string().optional(),
   color: z.string().optional(),
   createdAt: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
+  metadata: metadataSchema
 });
 
 const storedProjectsSchema = z.array(storedProjectSchema);
@@ -98,7 +129,10 @@ function loadProjectsFromFile(filePath: string): Project[] {
       console.warn('[projectRepository] Ignoring invalid storage file contents');
       return [];
     }
-    return parsed.data;
+    return parsed.data.map((project) => ({
+      ...project,
+      metadata: sanitizeMetadata(project.metadata)
+    }));
   } catch (error) {
     console.error('[projectRepository] Failed to load projects from file', error);
     return [];
@@ -108,10 +142,51 @@ function loadProjectsFromFile(filePath: string): Project[] {
 function persistProjects(filePath: string, projects: Project[]) {
   try {
     ensureDirectory(filePath);
-    writeFileSync(filePath, JSON.stringify(projects, null, 2), 'utf8');
+    const sanitized = projects.map((project) => ({
+      ...project,
+      metadata: sanitizeMetadata(project.metadata)
+    }));
+    writeFileSync(filePath, JSON.stringify(sanitized, null, 2), 'utf8');
   } catch (error) {
     console.error('[projectRepository] Failed to persist projects to file', error);
   }
+}
+
+const DEFAULT_METADATA: Required<ProjectMetadata> = {
+  unlockedPhases: ['upload'],
+  completedPhases: [],
+  currentPhase: 'upload',
+  customInstructions: ''
+};
+
+function sanitizeMetadata(metadata?: ProjectMetadata): ProjectMetadata {
+  const unlocked = Array.isArray(metadata?.unlockedPhases)
+    ? metadata?.unlockedPhases.filter(isValidPhase)
+    : DEFAULT_METADATA.unlockedPhases;
+
+  const completed = Array.isArray(metadata?.completedPhases)
+    ? metadata?.completedPhases.filter((phase) => isValidPhase(phase) && unlocked.includes(phase))
+    : DEFAULT_METADATA.completedPhases;
+
+  const current = isValidPhase(metadata?.currentPhase)
+    ? metadata?.currentPhase
+    : DEFAULT_METADATA.currentPhase;
+
+  const customInstructions = typeof metadata?.customInstructions === 'string'
+    ? metadata?.customInstructions
+    : DEFAULT_METADATA.customInstructions;
+
+  return {
+    ...metadata,
+    unlockedPhases: Array.from(new Set([...unlocked, current, DEFAULT_METADATA.currentPhase])),
+    completedPhases: completed,
+    currentPhase: current,
+    customInstructions
+  };
+}
+
+function isValidPhase(value: unknown): value is PhaseValue {
+  return typeof value === 'string' && PHASE_VALUES.includes(value as PhaseValue);
 }
 
 export class FileProjectRepository extends InMemoryProjectRepository {
@@ -148,6 +223,11 @@ export class FileProjectRepository extends InMemoryProjectRepository {
       persistProjects(this.filePath, this.list());
     }
     return deleted;
+  }
+
+  override clear(): void {
+    super.clear();
+    persistProjects(this.filePath, this.list());
   }
 }
 

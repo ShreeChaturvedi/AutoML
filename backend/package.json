@@ -11,13 +11,17 @@
     "build": "tsc -p tsconfig.json",
     "start": "node build/index.js",
     "lint": "eslint . --ext .ts",
-    "test": "vitest run --passWithNoTests"
+    "preserve:benchmark": "npm run build",
+    "serve:benchmark": "node build/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
     "dotenv": "^16.4.5",
     "express": "^5.0.1",
     "morgan": "^1.10.0",
+    "multer": "^2.0.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -25,7 +29,9 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/morgan": "^1.9.9",
+    "@types/multer": "^1.4.11",
     "@types/node": "^22.9.0",
+    "@types/supertest": "^6.0.3",
     "eslint": "^9.36.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "^2.30.0",

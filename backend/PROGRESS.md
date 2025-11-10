@@ -13,11 +13,14 @@ This log tracks the backend deliverables for the AI-Augmented AutoML Toolchain a
 - JSON file persistence via `storage/projects.json`, including schema validation and automatic directory creation.
 - Vitest + Supertest integration test covering create/list persistence across app restarts.
 - Documentation updates in `backend/README.md` outlining scripts, environment variables, and the API surface.
+- Frontend is now wired to the backend API; project CRUD/phase state persists via `/api/projects` while keeping the previous Zustand UX intact.
+- `npm run dev` (in `frontend/`) spins up both backend and frontend with prefixed logs so API requests are visible beside Vite output.
+- Dataset ingestion endpoint (`POST /api/upload/dataset`) profiles CSV/JSON/XLSX files, stores metadata/files on disk, and returns column stats + sample rows.
+- Dataset metadata can be retrieved via `GET /api/datasets`, enabling automated benchmarks to verify persisted uploads.
+- Frontend upload panel pushes tabular files to `/api/upload/dataset` while keeping local previews, and surfaces status badges for backend sync.
 
 ### ⏳ Remaining for Sprint 1 Definition of Done
-- Provide a single top-level command (or script) that runs both frontend and backend together.
 - Set up a CI stub (GitLab pipeline or similar) that executes `npm run lint` and `npm run test` for the backend (and eventually the frontend).
-- Wire the frontend project state to these APIs so persisted projects are surfaced in the UI (currently still local-only).
 
 ## Sprint 2 Preview (Weeks 3–4)
 - Dataset ingestion endpoints (`POST /upload/dataset`) that profile uploaded CSV/XLSX/JSON files.

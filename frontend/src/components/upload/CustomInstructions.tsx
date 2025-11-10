@@ -48,19 +48,29 @@ export function CustomInstructions({ projectId }: CustomInstructionsProps) {
   const charCount = instructions.length;
   const isOptimal = charCount >= minChars;
 
+  // Keep local state in sync when project metadata updates
+  useEffect(() => {
+    setInstructions(initialInstructions);
+    setHasChanges(false);
+  }, [initialInstructions]);
+
   // Auto-save after 2 seconds of no typing
   useEffect(() => {
     if (!hasChanges) return;
 
-    const timeoutId = setTimeout(() => {
-      // Save to project metadata
-      updateProject(projectId, {
-        metadata: {
-          ...project?.metadata,
-          customInstructions: instructions
-        }
-      });
-      setHasChanges(false);
+    const timeoutId = setTimeout(async () => {
+      try {
+        await updateProject(projectId, {
+          metadata: {
+            ...(project?.metadata ?? {}),
+            customInstructions: instructions
+          }
+        });
+      } catch (error) {
+        console.error('Failed to save custom instructions', error);
+      } finally {
+        setHasChanges(false);
+      }
     }, 2000);
 
     return () => clearTimeout(timeoutId);

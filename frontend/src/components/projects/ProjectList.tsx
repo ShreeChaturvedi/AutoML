@@ -17,6 +17,9 @@ import { ProjectDialog } from './ProjectDialog';
 export function ProjectList() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const projects = useProjectStore((state) => state.projects);
+  const isInitialized = useProjectStore((state) => state.isInitialized);
+  const isLoading = useProjectStore((state) => state.isLoading);
+  const error = useProjectStore((state) => state.error);
 
   return (
     <div className="space-y-2">
@@ -37,7 +40,15 @@ export function ProjectList() {
       </div>
 
       {/* Project List */}
-      {projects.length > 0 ? (
+      {!isInitialized && isLoading ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-muted-foreground">
+          Loading projects...
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-destructive">
+          {error}
+        </div>
+      ) : projects.length > 0 ? (
         <div className="space-y-1">
           {projects.map((project) => (
             <ProjectItem key={project.id} project={project} />

@@ -37,6 +37,13 @@ export interface FileMetadata {
   rowCount?: number;
   columnCount?: number;
   columns?: string[];
+  datasetId?: string;
+  datasetProfile?: {
+    nRows: number;
+    nCols: number;
+    dtypes: Record<string, string>;
+    nullCounts: Record<string, number>;
+  };
 
   // PDF specific
   pageCount?: number;
