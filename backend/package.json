@@ -11,16 +11,20 @@
     "build": "tsc -p tsconfig.json",
     "start": "node build/index.js",
     "lint": "eslint . --ext .ts",
+    "db:migrate": "tsx src/scripts/runMigrations.ts",
     "preserve:benchmark": "npm run build",
     "serve:benchmark": "node build/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "csv-parse": "^5.5.6",
+    "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
     "express": "^5.0.1",
     "morgan": "^1.10.0",
     "multer": "^2.0.0",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.16.3",
     "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
@@ -31,6 +35,7 @@
     "@types/morgan": "^1.9.9",
     "@types/multer": "^1.4.11",
     "@types/node": "^22.9.0",
+    "@types/pg": "^8.15.6",
     "@types/supertest": "^6.0.3",
     "eslint": "^9.36.0",
     "eslint-config-prettier": "^9.1.0",
