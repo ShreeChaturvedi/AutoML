@@ -10,13 +10,31 @@ export interface ValidateSqlResult {
   limitAppended: boolean;
 }
 
+/**
+ * Strip SQL comments (both -- line comments and /* block comments *​/)
+ * to get the actual SQL statement for validation
+ */
+function stripSqlComments(sql: string): string {
+  // Remove -- line comments
+  let result = sql.replace(/--[^\n]*(\n|$)/g, '\n');
+  // Remove /* */ block comments
+  result = result.replace(/\/\*[\s\S]*?\*\//g, '');
+  return result.trim();
+}
+
 export function validateReadOnlySql(sql: string, options: ValidateSqlOptions): ValidateSqlResult {
   const trimmed = sql.trim();
   if (!trimmed) {
     throw new Error('SQL statement required');
   }
 
-  const lower = trimmed.toLowerCase();
+  // Strip comments to find the actual SQL statement
+  const strippedSql = stripSqlComments(trimmed);
+  if (!strippedSql) {
+    throw new Error('SQL statement required (query contains only comments)');
+  }
+
+  const lower = strippedSql.toLowerCase();
   if (!(lower.startsWith('select') || lower.startsWith('with'))) {
     throw new Error('Only SELECT/CTE statements are allowed');
   }

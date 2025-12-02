@@ -48,26 +48,32 @@ export async function storeCachedQueryResult({
   const sqlHash = hashSql(projectId, sql);
   const expiresAt = addMilliseconds(new Date(), env.queryCacheTtlMs);
 
-  await pool.query(
-    `INSERT INTO query_cache (cache_id, project_id, sql_hash, sql_text, cached_result, metadata, last_accessed, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)
-     ON CONFLICT (project_id, sql_hash)
-     DO UPDATE SET cached_result = EXCLUDED.cached_result,
-                   metadata = EXCLUDED.metadata,
-                   last_accessed = NOW(),
-                   expires_at = EXCLUDED.expires_at`,
-    [
-      randomUUID(),
-      projectId,
-      sqlHash,
-      sql,
-      JSON.stringify(payload),
-      JSON.stringify({ rowCount: payload.rowCount, executionMs: payload.executionMs }),
-      expiresAt
-    ]
-  );
+  try {
+    await pool.query(
+      `INSERT INTO query_cache (cache_id, project_id, sql_hash, sql_text, cached_result, metadata, last_accessed, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)
+       ON CONFLICT (project_id, sql_hash)
+       DO UPDATE SET cached_result = EXCLUDED.cached_result,
+                     metadata = EXCLUDED.metadata,
+                     last_accessed = NOW(),
+                     expires_at = EXCLUDED.expires_at`,
+      [
+        randomUUID(),
+        projectId,
+        sqlHash,
+        sql,
+        JSON.stringify(payload),
+        JSON.stringify({ rowCount: payload.rowCount, executionMs: payload.executionMs }),
+        expiresAt
+      ]
+    );
 
-  await trimCacheIfNeeded(pool);
+    await trimCacheIfNeeded(pool);
+  } catch (error) {
+    // Log but don't fail - caching is optional, queries should still work
+    // Common cause: project doesn't exist in DB (created before Postgres was configured)
+    console.warn('[queryCache] Failed to cache query result:', (error as Error).message);
+  }
 }
 
 async function trimCacheIfNeeded(pool = getDbPool()) {
