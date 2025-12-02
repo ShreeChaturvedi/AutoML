@@ -1,0 +1,9 @@
+{
+  "name": "ai-augmented-automl-monorepo",
+  "private": true,
+  "scripts": {
+    "benchmark": "npm --prefix testing run benchmark",
+    "benchmark:headed": "npm --prefix testing run benchmark:headed",
+    "eval": "npm --prefix testing run eval"
+  }
+}

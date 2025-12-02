@@ -2,9 +2,10 @@
  * DataViewerTab - Tableau-style data exploration interface
  *
  * Now includes FileTabBar for switching between file previews and query results
+ * Uses backend Postgres for queries with EDA support
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { FileText, AlertCircle } from 'lucide-react';
 import { QueryPanel } from './QueryPanel';
@@ -12,12 +13,13 @@ import { FileTabBar } from './FileTabBar';
 import { DataTable } from './DataTable';
 import { useDataStore } from '@/stores/dataStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { getDuckDB } from '@/lib/duckdb';
+import { executeSqlQuery } from '@/lib/api/query';
 import type { QueryMode, DataPreview } from '@/types/file';
 
 export function DataViewerTab() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [queryPanelCollapsed, setQueryPanelCollapsed] = useState(false);
   const { projectId } = useParams();
   const projects = useProjectStore((state) => state.projects);
   const activeProject = projects.find((p) => p.id === projectId);
@@ -29,6 +31,14 @@ export function DataViewerTab() {
   const activeFileTabId = useDataStore((state) => state.activeFileTabId);
   const fileTabType = useDataStore((state) => state.fileTabType);
   const setActiveFileTab = useDataStore((state) => state.setActiveFileTab);
+  const hydrateFromBackend = useDataStore((state) => state.hydrateFromBackend);
+
+  // Hydrate data from backend on mount
+  useEffect(() => {
+    if (projectId) {
+      void hydrateFromBackend(projectId);
+    }
+  }, [projectId, hydrateFromBackend]);
 
   // Auto-select first tab if none selected
   useEffect(() => {
@@ -40,50 +50,88 @@ export function DataViewerTab() {
     }
   }, [activeFileTabId, previews, files, setActiveFileTab]);
 
+  // Derive table names and columns for SQL autocomplete
+  const tableNames = useMemo(() => {
+    return files
+      .filter((f) => f.metadata?.tableName)
+      .map((f) => f.metadata!.tableName!);
+  }, [files]);
+
+  const columnsByTable = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    for (const file of files) {
+      if (!file.metadata?.tableName) continue;
+      const preview = previews.find((p) => p.fileId === file.id);
+      if (preview) {
+        result[file.metadata.tableName] = preview.headers;
+      }
+    }
+    return result;
+  }, [files, previews]);
+
   // Handle query execution
   const handleExecuteQuery = useCallback(
     async (query: string, mode: QueryMode) => {
-      if (!activeProject || previews.length === 0) return;
+      if (!activeProject) return;
 
       setIsExecuting(true);
       setQueryError(null);
 
       try {
-        const duckdb = getDuckDB();
+        // Execute query using backend Postgres
+        const result = await executeSqlQuery({ projectId: activeProject.id, sql: query });
 
-        // For English mode, we would translate to SQL here (future enhancement)
-        // For now, treat it as SQL directly
-        const sqlQuery = query;
-
-        // Execute query using DuckDB
-        const result = await duckdb.executeQuery(sqlQuery);
-
-        // Convert QueryResult to DataPreview format
+        // Convert backend QueryResult to DataPreview format
         const dataPreview: DataPreview = {
           fileId: 'query-result',
-          headers: result.columns.map(col => col.name),
-          rows: result.rows,
-          totalRows: result.totalRows,
-          previewRows: result.rowCount,
-          // Optionally add statistics in future
+          headers: result.query.columns.map((col) => col.name),
+          rows: result.query.rows,
+          totalRows: result.query.rowCount,
+          previewRows: result.query.rowCount,
+          eda: result.query.eda // Include EDA metadata for Analysis tab
         };
 
-        // Create artifact with result
-        const artifactId = createArtifact(query, mode, dataPreview, activeProject.id);
+        // Create artifact with result, including EDA metadata
+        const artifactId = createArtifact(query, mode, dataPreview, activeProject.id, {
+          eda: result.query.eda,
+          cached: result.query.cached,
+          executionMs: result.query.executionMs,
+          cacheTimestamp: result.query.cached ? new Date().toISOString() : undefined
+        });
 
         // Switch to the new artifact tab
         setActiveFileTab(artifactId, 'artifact');
       } catch (error) {
         console.error('Query execution failed:', error);
-        const errorMessage = error instanceof Error 
-          ? error.message 
-          : 'Unknown error occurred';
+        let errorMessage = 'Unknown error occurred';
+        
+        if (error instanceof Error) {
+          // Check if it's an ApiError with payload containing detailed error info
+          const apiError = error as Error & { payload?: unknown };
+          if (apiError.payload && typeof apiError.payload === 'object') {
+            const payload = apiError.payload as Record<string, unknown>;
+            // Handle Zod validation errors
+            if (payload.errors && typeof payload.errors === 'object') {
+              const errors = payload.errors as { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+              const fieldErrors = errors.fieldErrors ? Object.entries(errors.fieldErrors).map(([k, v]) => `${k}: ${v.join(', ')}`).join('; ') : '';
+              const formErrors = errors.formErrors?.join('; ') || '';
+              errorMessage = [fieldErrors, formErrors].filter(Boolean).join(' | ') || error.message;
+            } else if (payload.error && typeof payload.error === 'string') {
+              errorMessage = payload.error;
+            } else {
+              errorMessage = error.message;
+            }
+          } else {
+            errorMessage = error.message;
+          }
+        }
+        
         setQueryError(errorMessage);
       } finally {
         setIsExecuting(false);
       }
     },
-    [activeProject, previews, createArtifact, setActiveFileTab]
+    [activeProject, createArtifact, setActiveFileTab]
   );
 
   if (previews.length === 0) {
@@ -160,11 +208,15 @@ export function DataViewerTab() {
           {getActiveTabContent()}
         </div>
 
-        {/* Query Panel (right side) */}
+        {/* Query Panel (right side) - collapsible with smooth animation */}
         <QueryPanel
           onExecute={handleExecuteQuery}
           isExecuting={isExecuting}
-          className="w-[350px] shrink-0"
+          className={queryPanelCollapsed ? 'w-12 shrink-0' : 'w-[400px] shrink-0'}
+          tableNames={tableNames}
+          columnsByTable={columnsByTable}
+          collapsed={queryPanelCollapsed}
+          onCollapsedChange={setQueryPanelCollapsed}
         />
       </div>
     </div>

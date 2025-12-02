@@ -24,7 +24,7 @@ export interface UploadedFile {
   size: number; // in bytes
   uploadedAt: Date;
   projectId: string;
-  file: File; // Original File object for processing
+  file?: File; // Original File object for processing (not available when hydrated from backend)
   previewUrl?: string; // For images and PDFs
   metadata?: FileMetadata;
 }
@@ -37,6 +37,19 @@ export interface FileMetadata {
   rowCount?: number;
   columnCount?: number;
   columns?: string[];
+  datasetId?: string;
+  tableName?: string; // Postgres table name for querying
+  datasetProfile?: {
+    nRows: number;
+    nCols: number;
+    dtypes: Record<string, string>;
+    nullCounts: Record<string, number>;
+  };
+
+  // Document specific
+  documentId?: string;
+  chunkCount?: number;
+  embeddingDimension?: number;
 
   // PDF specific
   pageCount?: number;
@@ -62,6 +75,7 @@ export interface DataPreview {
   totalRows: number;
   previewRows: number; // Number of rows in preview
   statistics?: ColumnStatistics[];
+  eda?: EdaSummary;
 }
 
 /**
@@ -95,6 +109,66 @@ export interface ColumnStatistics {
 export type QueryMode = 'english' | 'sql';
 
 /**
+ * EDA Summary types (from backend query API)
+ */
+export interface EdaSummary {
+  numericColumns: NumericColumnSummary[];
+  categoricalColumns: CategoricalColumnSummary[];
+  dataQuality: DataQualitySummary[];
+  histogram?: HistogramData;
+  scatter?: ScatterData;
+  correlations?: CorrelationData[];
+}
+
+export interface NumericColumnSummary {
+  column: string;
+  min: number;
+  max: number;
+  mean: number;
+  median: number;
+  stdDev: number;
+  skewness: number;
+  q1: number;
+  q3: number;
+  outlierCount: number;
+}
+
+export interface CategoricalColumnSummary {
+  column: string;
+  uniqueCount: number;
+  topValues: Array<{ value: string; count: number; percentage: number }>;
+  missingCount: number;
+  mode: string | null;
+}
+
+export interface DataQualitySummary {
+  column: string;
+  dataType: 'numeric' | 'categorical' | 'datetime' | 'boolean' | 'mixed';
+  totalCount: number;
+  missingCount: number;
+  missingPercentage: number;
+  uniqueCount: number;
+  uniquePercentage: number;
+}
+
+export interface HistogramData {
+  column: string;
+  buckets: Array<{ start: number; end: number; count: number }>;
+}
+
+export interface ScatterData {
+  xColumn: string;
+  yColumn: string;
+  points: Array<{ x: number; y: number }>;
+}
+
+export interface CorrelationData {
+  columnA: string;
+  columnB: string;
+  coefficient: number;
+}
+
+/**
  * Query artifact - represents a saved query result
  * Similar to a browser tab or Jupyter notebook cell
  */
@@ -107,6 +181,13 @@ export interface QueryArtifact {
   timestamp: Date;
   isSaved: boolean; // Whether saved to backend (future feature)
   projectId: string;
+  // EDA metadata from backend
+  eda?: EdaSummary;
+  cached?: boolean;
+  executionMs?: number;
+  cacheTimestamp?: string;
+  generatedSql?: string; // For NL queries
+  rationale?: string; // For NL queries
 }
 
 /**

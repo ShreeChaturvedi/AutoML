@@ -1,69 +1,171 @@
-# Automated Data Scientist Platform — CSE 448/449
+<<<<<<< README.md
+# AI-Augmented AutoML Toolchain
 
-A cloud-hosted, AI-assisted AutoML toolchain to move from raw data to a deployable model with less grunt work and more expert control.
+Modern AutoML workspace combining a TypeScript/Express API, a React data science UI, and an end-to-end Playwright benchmark. Built and maintained by the CSE 448 capstone team, the stack now includes a Postgres-backed query engine, document retrieval, and answer composition services.
 
----
+## Table of Contents
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [System Requirements](#system-requirements)
+- [Getting Started](#getting-started)
+  - [Install Dependencies](#install-dependencies)
+  - [Configure Environment](#configure-environment)
+  - [Run the Stack](#run-the-stack)
+- [Development Workflow](#development-workflow)
+- [Repository Structure](#repository-structure)
+- [Tooling & Commands](#tooling--commands)
+- [Documentation](#documentation)
+- [Data Storage](#data-storage)
+- [Support](#support)
+- [License](#license)
 
-## What this is (plain terms)
+## Overview
 
-- **Upload data + docs.** The system profiles your dataset and uses your PDFs/notes as domain context.
-- **Explore quickly.** Ask questions in natural language or run direct SQL; get quick EDA tables/charts.
-- **Tweak features, not code.** A “feature control panel” shows suggestions you can edit and toggle.
-- **Train and compare.** Spin up baseline models, track runs, view basic explainability.
-- **Package and monitor.** Ship a containerized API and keep an eye on performance/drift.
+The AI-Augmented AutoML Toolchain streamlines dataset ingestion, exploratory analysis, retrieval-augmented answering, and model workflow orchestration. The solution ships as a monorepo with three coordinated workspaces:
 
----
+1. `backend/` – Express + TypeScript API exposing project management and dataset profiling endpoints.
+2. `frontend/` – Vite + React SPA delivering the AutoML user experience.
+3. `testing/` – Playwright benchmark suite validating critical user journeys against compiled artifacts.
 
-## Start here (project docs)
+Refer to `ARCHITECTURE.md` for a detailed system design and interaction diagram.
 
-- **Overview & scope:** [Senior Design Project Proposal (PDF)](Senior%20Design%20Project%20Proposal.pdf)
-- **Background & UX notes:** [Proposal Detailed Brainstorm (TXT)](Proposal%20Detailed%20Brainstorm.txt)
-- **Schedule & deliverables:** [Biweekly Sprint Plan v2 (PDF)](Biweekly_Sprint_Plan_v2.pdf)
+## Key Features
 
----
+- Project lifecycle management with persisted metadata and workflow phase tracking.
+- Dataset ingestion pipeline with CSV/JSON/XLSX profiling, schema inference, and sample extraction.
+- Postgres-backed query services (direct SQL + NL→SQL) with caching, quick EDA summaries, and answer composition with citations.
+- Document ingestion and search (PDF/Markdown/TXT) for retrieval-augmented use cases.
+- Rich client UI with drag-and-drop uploads, tabbed data viewer, and Tailwind + shadcn component system.
+- Unified developer command (`npm --prefix frontend run dev`) that launches both frontend and backend in watch mode.
+- Automated Playwright benchmark (`npm run benchmark`) that builds both workspaces and verifies end-to-end flows.
 
-## MVP scope
+## System Requirements
 
-1. **Ingestion & Context**
-   - Schema/type detection, nulls, samples
-   - Embed project docs for domain-aware guidance (RAG)
+- **Node.js**: 22 LTS
+- **npm**: 10+
+- **OS**: macOS, Linux, or Windows (WSL recommended)
+- Optional: Chromium download permissions for Playwright benchmark runs.
 
-2. **Explore**
-   - NL → SQL with safe fallbacks
-   - Quick EDA visuals
+## Getting Started
 
-3. **Feature Control Panel**
-   - Suggested transforms (name, method, params) rendered as editable controls
+### Install Dependencies
 
-4. **Train**
-   - Templated baselines (e.g., XGBoost/LightGBM)
-   - Simple interpretability and run tracking
+From the repository root, install workspace dependencies:
 
-5. **Deploy & Monitor**
-   - Containerized endpoint
-   - Basic health/drift checks
+```bash
+npm --prefix backend install
+npm --prefix frontend install
+npm --prefix testing install   # required for automated benchmark
+```
 
----
+### Configure Environment
 
-## How we’ll build it (high level)
+1. Copy environment template if backend defaults need adjustment:
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+2. Point `DATABASE_URL` at your Postgres instance. When using Docker locally, a common command is:
+   ```bash
+   docker run --rm -d --name automl-pg \
+     -e POSTGRES_PASSWORD=postgres \
+     -e POSTGRES_DB=automl \
+     -p 5433:5432 postgres:16
+   ```
+   Then set `DATABASE_URL=postgres://postgres:postgres@localhost:5433/automl`.
+3. Update other values such as `PORT`, `ALLOWED_ORIGINS`, storage paths, and caching limits as needed (see `backend/src/config.ts`).
 
-- **Sprints:** 13 two-week sprints from setup → ingestion → explore → feature panel → training → deploy → demo
-- **Contract:** Backend returns compact, validated JSON; frontend renders stable controls from that JSON
+### Apply Database Migrations
 
----
+The new query/document/answering services expect Postgres tables. Once `DATABASE_URL` points at a running instance, run:
 
-## Milestones
+```bash
+npm --prefix backend run db:migrate
+```
 
-- **S1–S3:** Repo/CI → Ingestion v1 → Explore v0  
-- **S4–S7:** RAG v1 → Feature Panel v1 → Latency/quality passes  
-- **S8–S10:** HPO + run tracking → Model packaging  
-- **S11:** Guardrails → Cloud deploy → Final demo
+This creates the required tables (`projects`, `datasets`, `documents`, `chunks`, `embeddings`, `query_cache`, etc.). Re-run the command whenever new migrations are added. After migration you can seed data via curl (examples in `docs/person1-progress.md`) and browse it in TablePlus/psql.
 
----
+### Run the Stack
 
-## Contributing
+```bash
+npm --prefix frontend run dev
+```
 
-- Open small, focused PRs with a clear summary and checklist.
-- Follow lint/test rules; CI must pass.
-- Log issues with steps to reproduce and expected vs. actual behavior.
+The command above launches:
+- Backend API at `http://localhost:4000/api`
+- Vite dev server at `http://localhost:5173`
 
+Run the workspaces individually when required:
+- `npm --prefix backend run dev` – backend only (requires Postgres running + migrations applied)
+- `npm --prefix frontend run dev:ui` – frontend only
+
+After the backend is up, seed some data by calling the APIs (project creation, `/api/upload/doc`, `/api/query/sql`, `/api/answer`). The curl snippets in `docs/person1-progress.md` double as smoke tests.
+
+## Development Workflow
+
+1. **Code** – Implement changes in the appropriate workspace.
+2. **Lint/Test** – Execute local checks:
+   - `npm --prefix backend run lint`
+   - `npm --prefix frontend run lint`
+3. **Run migrations** – `npm --prefix backend run db:migrate` any time the schema changes (safe to run multiple times).
+4. **Validate End-to-End** – `npm run benchmark` (headless) or `npm run benchmark:headed` (with browser UI).
+5. **Run the evaluation suite** – with the backend running, execute `EVAL_API_BASE=http://localhost:4000/api npm --prefix testing run eval` to verify NL→SQL/RAG metrics.
+6. **Review** – Ensure docs and type definitions are updated before submitting changes.
+
+## Repository Structure
+
+```text
+ai-augmented-auto-ml-toolchain/
+├── ARCHITECTURE.md
+├── backend/
+│   ├── src/
+│   └── storage/
+├── frontend/
+│   └── src/
+├── testing/
+│   └── tests/
+└── Attachments/
+```
+
+- Application flows and file-level references are documented in `ARCHITECTURE.md`.
+- Workspace-specific guidance lives in `backend/README.md` and `frontend/README.md`.
+
+## Tooling & Commands
+
+| Context | Command | Description |
+| ------- | ------- | ----------- |
+| Root | `npm run benchmark` | Build backend + frontend, run Playwright benchmark headlessly. |
+| Root | `npm run benchmark:headed` | Same as above but displays the Chromium window. |
+| Backend | `npm --prefix backend run dev` | Start API with hot reload (`tsx watch`). |
+| Backend | `npm --prefix backend run build` | Compile TypeScript into `build/`. |
+| Backend | `npm --prefix backend run start` | Serve compiled backend. |
+| Frontend | `npm --prefix frontend run dev` | Launch combined dev environment (frontend + backend). |
+| Frontend | `npm --prefix frontend run build` | Type-check and produce production bundle. |
+| Frontend | `npm --prefix frontend run preview` | Serve the built frontend for validation. |
+
+## Documentation
+
+- `ARCHITECTURE.md` – System architecture, diagrams, and data flows.
+- `backend/README.md` – Backend scripts, environment variables, and API surface.
+- `frontend/README.md` – Frontend capabilities, tech stack, and troubleshooting.
+- `docs/api-contracts.md` – Shared request/response contracts for Sprint 3/4 endpoints (query, document ingestion, answering).
+- `Attachments/` – Supporting materials, design artifacts, and historical context.
+
+## Data Storage
+
+The backend persists core JSON artifacts under `backend/storage/`, and Postgres stores all Sprint 3/4 features (projects, datasets, documents, embeddings, caches):
+
+- `storage/projects.json` – Project metadata and workflow phases.
+- `storage/datasets/metadata.json` – Dataset profiles (schema, inferred types, sample).
+- `storage/datasets/files/<datasetId>/<filename>` – Raw dataset binaries.
+
+Override these locations via environment variables (`STORAGE_PATH`, `DATASET_METADATA_PATH`, `DATASET_STORAGE_DIR`).
+For Postgres-backed features, configure `DATABASE_URL` and run migrations (`npm --prefix backend run db:migrate`).
+
+## Support
+
+- Issues and enhancements are tracked through the team’s Git hosting platform.
+- For urgent runtime incidents, contact the current backend or frontend owner within the capstone team.
+
+## License
+
+To be determined (internal project).

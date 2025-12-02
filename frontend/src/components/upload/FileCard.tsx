@@ -31,9 +31,11 @@ import { cn } from '@/lib/utils';
 interface FileCardProps {
   file: UploadedFile;
   onRemove: (fileId: string) => void;
+  status?: 'uploading' | 'uploaded' | 'error';
+  errorMessage?: string;
 }
 
-export function FileCard({ file, onRemove }: FileCardProps) {
+export function FileCard({ file, onRemove, status, errorMessage }: FileCardProps) {
   const [showPreview, setShowPreview] = useState(false);
 
   const iconName = getFileIcon(file.type);
@@ -58,7 +60,10 @@ export function FileCard({ file, onRemove }: FileCardProps) {
 
   return (
     <>
-      <Card className="group relative overflow-hidden hover:shadow-md hover:border-primary/20 transition-all duration-200">
+      <Card
+        data-testid={`file-card-${file.id}`}
+        className="group relative overflow-hidden hover:shadow-md hover:border-primary/20 transition-all duration-200"
+      >
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             {/* Icon - Type-specific colors */}
@@ -102,7 +107,43 @@ export function FileCard({ file, onRemove }: FileCardProps) {
                 <span className="text-xs text-muted-foreground font-mono">
                   {formatFileSize(file.size)}
                 </span>
+                {status === 'uploading' && (
+                  <Badge variant="outline" className="text-xs">
+                    Uploading…
+                  </Badge>
+                )}
+                {status === 'uploaded' && file.metadata?.datasetId && (
+                  <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-500/40">
+                    Synced
+                  </Badge>
+                )}
+                {status === 'uploaded' && file.metadata?.documentId && (
+                  <Badge variant="outline" className="text-xs text-blue-600 border-blue-500/40">
+                    Ingested
+                  </Badge>
+                )}
               </div>
+              {status === 'error' && (
+                <p className="text-xs text-destructive">{errorMessage ?? 'Upload failed'}</p>
+              )}
+              {status === 'uploaded' && file.metadata?.tableName && (
+                <p className="text-xs text-muted-foreground font-mono">
+                  Table: {file.metadata.tableName}
+                </p>
+              )}
+              {file.metadata?.documentId && (
+                <p className="text-xs text-muted-foreground">
+                  Document ID: {file.metadata.documentId}
+                </p>
+              )}
+              {typeof file.metadata?.chunkCount === 'number' && (
+                <p className="text-xs text-muted-foreground">
+                  {file.metadata.chunkCount} chunks
+                  {typeof file.metadata?.embeddingDimension === 'number'
+                    ? ` • ${file.metadata.embeddingDimension}d`
+                    : ''}
+                </p>
+              )}
             </div>
 
             {/* Actions - Show on hover */}

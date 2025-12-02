@@ -12,11 +12,11 @@
  * frontend/documentation/design/data-viewer-system.md
  */
 
-import { useState, useCallback, Suspense, lazy, useEffect } from 'react';
+import { useState, useCallback, Suspense, lazy, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Textarea } from '@/components/ui/textarea';
-import { Play, Loader2, MessageSquare, Code2 } from 'lucide-react';
+import { Play, Loader2, MessageSquare, Code2, PanelRightClose, PanelRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/theme-provider';
 import type { QueryMode } from '@/types/file';
@@ -28,20 +28,52 @@ const Editor = lazy(() =>
   }))
 );
 
+// Import monaco types for completion registration
+import type { IDisposable, languages } from 'monaco-editor';
+import type { Monaco } from '@monaco-editor/react';
+
+// SQL keywords for autocomplete
+const SQL_KEYWORDS = [
+  'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN',
+  'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET', 'JOIN', 'LEFT JOIN',
+  'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT',
+  'SUM', 'AVG', 'MIN', 'MAX', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'NULL',
+  'IS NULL', 'IS NOT NULL', 'ASC', 'DESC', 'UNION', 'UNION ALL', 'EXCEPT',
+  'INTERSECT', 'EXISTS', 'ALL', 'ANY', 'WITH', 'OVER', 'PARTITION BY',
+  'ROW_NUMBER', 'RANK', 'DENSE_RANK', 'COALESCE', 'NULLIF', 'CAST', 'CONVERT'
+];
+
 interface QueryPanelProps {
   onExecute: (query: string, mode: QueryMode) => void;
   isExecuting?: boolean;
   className?: string;
+  /** Table names available for autocomplete suggestions */
+  tableNames?: string[];
+  /** Column names for autocomplete, keyed by table name */
+  columnsByTable?: Record<string, string[]>;
+  /** Whether the panel is collapsed */
+  collapsed?: boolean;
+  /** Callback when collapse state changes */
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 const DEFAULT_SQL = `-- Enter your SQL query
--- Example: SELECT * FROM data LIMIT 100
+-- Use the table name from your uploaded dataset
+-- Press Ctrl+Space for autocomplete suggestions
 
-SELECT * FROM data LIMIT 100`;
+SELECT * FROM your_table LIMIT 100`;
 
 const DEFAULT_ENGLISH = '';
 
-export function QueryPanel({ onExecute, isExecuting = false, className }: QueryPanelProps) {
+export function QueryPanel({ 
+  onExecute, 
+  isExecuting = false, 
+  className, 
+  tableNames = [],
+  columnsByTable = {},
+  collapsed = false,
+  onCollapsedChange
+}: QueryPanelProps) {
   const [mode, setMode] = useState<QueryMode>('sql');
   
   // Separate state for each mode (Issue #5)
@@ -52,6 +84,18 @@ export function QueryPanel({ onExecute, isExecuting = false, className }: QueryP
   const { theme: appTheme } = useTheme();
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
   
+  // Store completion provider disposable for cleanup
+  const completionProviderRef = useRef<IDisposable | null>(null);
+  
+  // Cleanup completion provider on unmount
+  useEffect(() => {
+    return () => {
+      if (completionProviderRef.current) {
+        completionProviderRef.current.dispose();
+      }
+    };
+  }, []);
+
   // Resolve system theme preference
   useEffect(() => {
     if (appTheme === 'system') {
@@ -108,12 +152,46 @@ export function QueryPanel({ onExecute, isExecuting = false, className }: QueryP
     [handleExecute]
   );
 
+  // Collapsed state - just show a thin bar with expand button
+  if (collapsed) {
+    return (
+      <div className={cn(
+        'flex flex-col h-full bg-card border-l items-center py-4 transition-all duration-300 ease-in-out',
+        className
+      )}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onCollapsedChange?.(false)}
+          className="mb-2"
+          title="Expand Query Panel"
+        >
+          <PanelRight className="h-4 w-4" />
+        </Button>
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-xs text-muted-foreground [writing-mode:vertical-lr] rotate-180">
+            Query Builder
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn('flex flex-col h-full bg-card border-l', className)}>
+    <div className={cn('flex flex-col h-full bg-card border-l transition-all duration-300 ease-in-out', className)}>
       {/* Header */}
       <div className="p-4 border-b space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">Query Builder</h3>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onCollapsedChange?.(true)}
+            className="h-8 w-8"
+            title="Collapse Query Panel"
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Mode Toggle - Better UI (Issue #3) */}
@@ -166,15 +244,78 @@ export function QueryPanel({ onExecute, isExecuting = false, className }: QueryP
                 defaultLanguage="sql"
                 value={sqlQuery}
                 onChange={(value) => handleQueryChange(value || '')}
-                onMount={(editor) => {
+                onMount={(editorInstance, monaco: Monaco) => {
                   // Focus editor on mount
-                  editor.focus();
+                  editorInstance.focus();
                   // Set up keyboard shortcuts
-                  editor.addCommand(
+                  editorInstance.addCommand(
                     // Cmd/Ctrl + Enter
                     (window.navigator.platform.toLowerCase().includes('mac') ? 2048 : 2176) | 3,
                     handleExecute
                   );
+                  
+                  // Clean up previous completion provider if it exists
+                  if (completionProviderRef.current) {
+                    completionProviderRef.current.dispose();
+                  }
+                  
+                  // Register custom SQL completion provider for keywords, tables, and columns
+                  completionProviderRef.current = monaco.languages.registerCompletionItemProvider('sql', {
+                    triggerCharacters: [' ', '.', ','],
+                    provideCompletionItems: (model, position) => {
+                      const word = model.getWordUntilPosition(position);
+                      const range = {
+                        startLineNumber: position.lineNumber,
+                        endLineNumber: position.lineNumber,
+                        startColumn: word.startColumn,
+                        endColumn: word.endColumn
+                      };
+                      
+                      const suggestions: languages.CompletionItem[] = [];
+                      
+                      // Add SQL keywords with high priority
+                      SQL_KEYWORDS.forEach((keyword) => {
+                        suggestions.push({
+                          label: keyword,
+                          kind: monaco.languages.CompletionItemKind.Keyword,
+                          insertText: keyword,
+                          range,
+                          detail: 'SQL Keyword',
+                          sortText: '0' + keyword // Sort keywords first
+                        });
+                      });
+                      
+                      // Add table name suggestions
+                      tableNames.forEach((tableName) => {
+                        suggestions.push({
+                          label: tableName,
+                          kind: monaco.languages.CompletionItemKind.Class,
+                          insertText: tableName,
+                          range,
+                          detail: 'Table',
+                          documentation: `Database table: ${tableName}`,
+                          sortText: '1' + tableName
+                        });
+                      });
+                      
+                      // Add column suggestions for each table
+                      Object.entries(columnsByTable).forEach(([tableName, columns]) => {
+                        columns.forEach((col) => {
+                          suggestions.push({
+                            label: col,
+                            kind: monaco.languages.CompletionItemKind.Field,
+                            insertText: col,
+                            range,
+                            detail: `Column in ${tableName}`,
+                            documentation: `Column from table ${tableName}`,
+                            sortText: '2' + col
+                          });
+                        });
+                      });
+                      
+                      return { suggestions };
+                    }
+                  });
                 }}
                 // Dynamic theme based on app theme (Issue #2)
                 theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
@@ -189,10 +330,19 @@ export function QueryPanel({ onExecute, isExecuting = false, className }: QueryP
                   wordWrap: 'on',
                   automaticLayout: true,
                   padding: { top: 12, bottom: 12 },
+                  // Fix: Ensure autocomplete widgets render correctly in transformed containers
+                  fixedOverflowWidgets: true,
                   suggest: {
                     showKeywords: true,
-                    showSnippets: true
-                  }
+                    showSnippets: true,
+                    // Improve autocomplete behavior
+                    insertMode: 'replace',
+                    filterGraceful: true,
+                    localityBonus: true
+                  },
+                  // Better cursor and selection visibility
+                  cursorBlinking: 'smooth',
+                  cursorSmoothCaretAnimation: 'on'
                 }}
               />
             </Suspense>

@@ -120,7 +120,7 @@ export function AppShell({ children }: AppShellProps) {
                     </BreadcrumbSeparator>,
                     <BreadcrumbItem key={phase}>
                       <BreadcrumbLink
-                        href={`/project/${activeProjectId}/${phase}`}
+                        href={`/project/${activeProject?.id}/${phase}`}
                         onClick={(e) => {
                           e.preventDefault();
                           handlePhaseClick(phase);
@@ -146,7 +146,7 @@ export function AppShell({ children }: AppShellProps) {
             {activeProject && currentPhase && getNextPhase(currentPhase) && (
               <ContinueButton
                 currentPhase={currentPhase}
-                projectId={activeProjectId}
+                projectId={activeProject.id}
                 className="h-8"
               />
             )}

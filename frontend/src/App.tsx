@@ -10,10 +10,14 @@
  */
 
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { UploadArea } from '@/components/upload/UploadArea';
 import { DataViewerTab } from '@/components/data/DataViewerTab';
+import { PreprocessingPanel } from '@/components/preprocessing/PreprocessingPanel';
+import { FeatureEngineeringPanel } from '@/components/features/FeatureEngineeringPanel';
+import { TrainingPanel } from '@/components/training/TrainingPanel';
 import { useProjectStore } from '@/stores/projectStore';
 import { FolderOpen, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,7 +27,43 @@ import type { Phase } from '@/types/phase';
 // Home page - shown when no project is selected
 function HomePage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  // Fix: Use individual selectors to avoid creating new objects on every render
   const projects = useProjectStore((state) => state.projects);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const setActiveProject = useProjectStore((state) => state.setActiveProject);
+  const isInitialized = useProjectStore((state) => state.isInitialized);
+  const isLoading = useProjectStore((state) => state.isLoading);
+  const error = useProjectStore((state) => state.error);
+
+  // Clear active project when HomePage mounts (fixes navigation bug)
+  useEffect(() => {
+    if (activeProjectId !== null) {
+      setActiveProject(null);
+    }
+  }, [activeProjectId, setActiveProject]);
+
+  if (!isInitialized && isLoading && projects.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading projects...</p>
+      </div>
+    );
+  }
+
+  if (error && projects.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-sm text-destructive">{error}</p>
+          <Button size="sm" variant="outline" onClick={() => setIsCreateDialogOpen(true)}>
+            <FolderOpen className="h-4 w-4 mr-2" />
+            Create Project
+          </Button>
+          <ProjectDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full items-center justify-center">
@@ -62,6 +102,13 @@ function HomePage() {
 function ProjectRedirect() {
   const { projectId } = useParams();
   const projects = useProjectStore((state) => state.projects);
+  const isInitialized = useProjectStore((state) => state.isInitialized);
+  const isLoading = useProjectStore((state) => state.isLoading);
+
+  if (!isInitialized) {
+    return isLoading ? null : <Navigate to="/" replace />;
+  }
+
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
 
   if (!project) {
@@ -69,46 +116,58 @@ function ProjectRedirect() {
   }
 
   // Redirect to current phase (or upload if not set)
-  return <Navigate to={`/project/${projectId}/${project.currentPhase || 'upload'}`} replace />;
+  return <Navigate to={`/project/${project.id}/${project.currentPhase || 'upload'}`} replace />;
 }
 
 // Project workspace - shown when a project and phase are selected
 function ProjectWorkspace() {
   const { projectId, phase } = useParams<{ projectId: string; phase: Phase }>();
   const projects = useProjectStore((state) => state.projects);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const setCurrentPhase = useProjectStore((state) => state.setCurrentPhase);
   const isPhaseUnlocked = useProjectStore((state) => state.isPhaseUnlocked);
+  const setActiveProject = useProjectStore((state) => state.setActiveProject);
+  const isInitialized = useProjectStore((state) => state.isInitialized);
 
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
 
-  // Set active project if not set
-  const setActiveProject = useProjectStore((state) => state.setActiveProject);
   useEffect(() => {
-    if (projectId && projectId !== useProjectStore.getState().activeProjectId) {
+    if (!isInitialized || !projectId) return;
+    if (projectId !== activeProjectId) {
       setActiveProject(projectId);
     }
-  }, [projectId, setActiveProject]);
+  }, [isInitialized, projectId, activeProjectId, setActiveProject]);
+
+  useEffect(() => {
+    if (!isInitialized || !project || !phase) return;
+    if (project.currentPhase !== phase) {
+      setCurrentPhase(project.id, phase as Phase);
+    }
+  }, [isInitialized, project, phase, setCurrentPhase]);
+
+  if (!isInitialized) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          Loading project workspace...
+        </p>
+      </div>
+    );
+  }
 
   if (!project) {
     return <Navigate to="/" replace />;
   }
 
   if (!phase) {
-    return <Navigate to={`/project/${projectId}/${project.currentPhase || 'upload'}`} replace />;
+    return <Navigate to={`/project/${project.id}/${project.currentPhase || 'upload'}`} replace />;
   }
 
   // Check if phase is unlocked
-  if (!isPhaseUnlocked(projectId, phase as Phase)) {
+  if (!isPhaseUnlocked(project.id, phase as Phase)) {
     // Redirect to current phase if locked
-    return <Navigate to={`/project/${projectId}/${project.currentPhase}`} replace />;
+    return <Navigate to={`/project/${project.id}/${project.currentPhase}`} replace />;
   }
-
-  // Update current phase
-  useEffect(() => {
-    if (phase && project.currentPhase !== phase) {
-      setCurrentPhase(projectId, phase as Phase);
-    }
-  }, [phase, projectId, project.currentPhase, setCurrentPhase]);
 
   // Render content based on phase
   switch (phase as Phase) {
@@ -119,52 +178,13 @@ function ProjectWorkspace() {
       return <DataViewerTab />;
 
     case 'preprocessing':
-      return (
-        <div className="flex h-full items-center justify-center p-6">
-          <div className="text-center space-y-2">
-            <h3 className="text-lg font-semibold text-foreground">Data Preprocessing</h3>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Preprocessing interface will be implemented here. This is where users can clean,
-              transform, and prepare their data for model training.
-            </p>
-            <p className="text-xs text-muted-foreground italic">
-              TODO: Implement preprocessing UI with data cleaning, transformation, and feature
-              engineering tools.
-            </p>
-          </div>
-        </div>
-      );
+      return <PreprocessingPanel />;
 
     case 'feature-engineering':
-      return (
-        <div className="flex h-full items-center justify-center p-6">
-          <div className="text-center space-y-2">
-            <h3 className="text-lg font-semibold text-foreground">Feature Engineering</h3>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Feature engineering interface will be implemented here with AI-assisted suggestions.
-            </p>
-            <p className="text-xs text-muted-foreground italic">
-              TODO: Implement RAG-based feature suggestions and CRUD interface.
-            </p>
-          </div>
-        </div>
-      );
+      return <FeatureEngineeringPanel projectId={projectId!} />;
 
     case 'training':
-      return (
-        <div className="flex h-full items-center justify-center p-6">
-          <div className="text-center space-y-2">
-            <h3 className="text-lg font-semibold text-foreground">Model Training</h3>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Model training interface with algorithm selection, hyperparameter tuning, and
-              experiment tracking.
-            </p>
-            <p className="text-xs text-muted-foreground italic">
-              TODO: Implement model training UI with backend integration.
-            </p>
-          </div>
-        </div>
-      );
+      return <TrainingPanel />;
 
     case 'experiments':
       return (
@@ -196,37 +216,60 @@ function ProjectWorkspace() {
         </div>
       );
 
-    case 'chat':
-      return (
-        <div className="flex h-full items-center justify-center p-6">
-          <div className="text-center space-y-2">
-            <h3 className="text-lg font-semibold text-foreground">AI Assistant</h3>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Policy-aware AI assistant powered by RAG for guidance and insights.
-            </p>
-            <p className="text-xs text-muted-foreground italic">
-              TODO: Implement AI chat interface with RAG integration.
-            </p>
-          </div>
-        </div>
-      );
-
     default:
-      return <Navigate to={`/project/${projectId}/upload`} replace />;
+      return <Navigate to={`/project/${project.id}/upload`} replace />;
   }
 }
 
 function App() {
+  const isInitialized = useProjectStore((state) => state.isInitialized);
+  const isLoading = useProjectStore((state) => state.isLoading);
+  const error = useProjectStore((state) => state.error);
+  const projects = useProjectStore((state) => state.projects);
+
+  useEffect(() => {
+    void useProjectStore.getState().initialize();
+  }, []);
+
+  let content: ReactNode;
+
+  if (!isInitialized && isLoading && projects.length === 0) {
+    content = (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Connecting to backend...</p>
+      </div>
+    );
+  } else if (!isInitialized && error && projects.length === 0) {
+    content = (
+      <div className="flex h-full items-center justify-center">
+        <div className="space-y-2 text-center">
+          <p className="text-sm text-destructive">{error}</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void useProjectStore.getState().initialize();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  } else {
+    content = (
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/project/:projectId" element={<ProjectRedirect />} />
+        <Route path="/project/:projectId/:phase" element={<ProjectWorkspace />} />
+      </Routes>
+    );
+  }
+
   return (
     <BrowserRouter>
       <div className="min-h-screen w-full bg-background text-foreground">
-        <AppShell>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/project/:projectId" element={<ProjectRedirect />} />
-            <Route path="/project/:projectId/:phase" element={<ProjectWorkspace />} />
-          </Routes>
-        </AppShell>
+        <AppShell>{content}</AppShell>
       </div>
     </BrowserRouter>
   );

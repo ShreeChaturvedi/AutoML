@@ -1,0 +1,100 @@
+import { create } from 'zustand';
+import type { FeatureSpec } from '@/types/feature';
+import { useProjectStore } from './projectStore';
+
+interface FeatureState {
+  features: FeatureSpec[];
+  addFeature: (feature: Omit<FeatureSpec, 'id' | 'createdAt' | 'enabled'> & { enabled?: boolean }) => FeatureSpec;
+  updateFeature: (id: string, updates: Partial<FeatureSpec>) => void;
+  toggleFeature: (id: string) => void;
+  removeFeature: (id: string) => void;
+  getFeaturesByProject: (projectId: string) => FeatureSpec[];
+  syncFeaturesToProject: (projectId: string) => Promise<void>;
+}
+
+function makeId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `feature-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export const useFeatureStore = create<FeatureState>()((set, get) => ({
+  features: [],
+
+  addFeature(featureInput) {
+    const feature: FeatureSpec = {
+      id: makeId(),
+      createdAt: new Date().toISOString(),
+      enabled: featureInput.enabled ?? true,
+      ...featureInput
+    };
+
+    set((state) => ({
+      features: [...state.features, feature]
+    }));
+
+    void get().syncFeaturesToProject(feature.projectId);
+    return feature;
+  },
+
+  updateFeature(id, updates) {
+    set((state) => ({
+      features: state.features.map((feature) =>
+        feature.id === id ? { ...feature, ...updates } : feature
+      )
+    }));
+
+    const feature = get().features.find((item) => item.id === id);
+    if (feature) {
+      void get().syncFeaturesToProject(feature.projectId);
+    }
+  },
+
+  toggleFeature(id) {
+    set((state) => ({
+      features: state.features.map((feature) =>
+        feature.id === id ? { ...feature, enabled: !feature.enabled } : feature
+      )
+    }));
+
+    const feature = get().features.find((item) => item.id === id);
+    if (feature) {
+      void get().syncFeaturesToProject(feature.projectId);
+    }
+  },
+
+  removeFeature(id) {
+    const feature = get().features.find((item) => item.id === id);
+    set((state) => ({
+      features: state.features.filter((item) => item.id !== id)
+    }));
+
+    if (feature) {
+      void get().syncFeaturesToProject(feature.projectId);
+    }
+  },
+
+  getFeaturesByProject(projectId) {
+    return get().features.filter((feature) => feature.projectId === projectId);
+  },
+
+  async syncFeaturesToProject(projectId: string) {
+    const projectStore = useProjectStore.getState();
+    const project = projectStore.getProjectById(projectId);
+    if (!project) return;
+
+    const features = get().features.filter((feature) => feature.projectId === projectId);
+
+    const metadata = {
+      ...(project.metadata ?? {}),
+      features
+    };
+
+    try {
+      await projectStore.updateProject(projectId, { metadata });
+    } catch (error) {
+      console.error('Failed to sync features to project metadata', error);
+    }
+  }
+}));

@@ -1,0 +1,5 @@
+node_modules
+build
+storage
+.env
+.DS_Store
