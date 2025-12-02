@@ -14,7 +14,6 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { PhaseList } from './PhaseList';
 import { ProjectList } from '@/components/projects/ProjectList';
@@ -106,7 +105,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
 
       {/* Main Content Section */}
       <div className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full">
+        <div className="h-full overflow-y-auto">
           <div className="p-4">
             {activeProject ? (
               /* Show phases when project is active */
@@ -116,7 +115,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
               <ProjectList />
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       <Separator />

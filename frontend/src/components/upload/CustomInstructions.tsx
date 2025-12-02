@@ -34,7 +34,9 @@ interface CustomInstructionsProps {
 
 export function CustomInstructions({ projectId }: CustomInstructionsProps) {
   const updateProject = useProjectStore((state) => state.updateProject);
-  const project = useProjectStore((state) => state.getProjectById(projectId));
+  const project = useProjectStore((state) =>
+    state.projects.find((p) => p.id === projectId)
+  );
 
   // Get instructions from project metadata
   const initialInstructions = (project?.metadata?.customInstructions as string) || '';

@@ -117,13 +117,31 @@ export function FileCard({ file, onRemove, status, errorMessage }: FileCardProps
                     Synced
                   </Badge>
                 )}
+                {status === 'uploaded' && file.metadata?.documentId && (
+                  <Badge variant="outline" className="text-xs text-blue-600 border-blue-500/40">
+                    Ingested
+                  </Badge>
+                )}
               </div>
               {status === 'error' && (
                 <p className="text-xs text-destructive">{errorMessage ?? 'Upload failed'}</p>
               )}
-              {status === 'uploaded' && file.metadata?.datasetId && (
+              {status === 'uploaded' && file.metadata?.tableName && (
+                <p className="text-xs text-muted-foreground font-mono">
+                  Table: {file.metadata.tableName}
+                </p>
+              )}
+              {file.metadata?.documentId && (
                 <p className="text-xs text-muted-foreground">
-                  Dataset ID: {file.metadata.datasetId}
+                  Document ID: {file.metadata.documentId}
+                </p>
+              )}
+              {typeof file.metadata?.chunkCount === 'number' && (
+                <p className="text-xs text-muted-foreground">
+                  {file.metadata.chunkCount} chunks
+                  {typeof file.metadata?.embeddingDimension === 'number'
+                    ? ` • ${file.metadata.embeddingDimension}d`
+                    : ''}
                 </p>
               )}
             </div>

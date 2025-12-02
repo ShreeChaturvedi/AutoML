@@ -27,7 +27,9 @@
  * - Everything visible without excessive scrolling
  */
 
+import { useEffect } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
+import { useDataStore } from '@/stores/dataStore';
 import { ProjectHeader } from './ProjectHeader';
 import { CustomInstructions } from './CustomInstructions';
 import { DataUploadPanel } from './DataUploadPanel';
@@ -37,6 +39,14 @@ export function UploadArea() {
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const projects = useProjectStore((state) => state.projects);
   const activeProject = activeProjectId ? projects.find(p => p.id === activeProjectId) : undefined;
+  const hydrateFromBackend = useDataStore((state) => state.hydrateFromBackend);
+
+  // Hydrate persisted datasets on mount
+  useEffect(() => {
+    if (activeProjectId) {
+      void hydrateFromBackend(activeProjectId);
+    }
+  }, [activeProjectId, hydrateFromBackend]);
 
   // Safety check - should not happen in normal flow
   if (!activeProject) {

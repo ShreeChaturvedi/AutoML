@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -93,7 +94,9 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   const createProject = useProjectStore((state) => state.createProject);
   const updateProject = useProjectStore((state) => state.updateProject);
+  const setActiveProject = useProjectStore((state) => state.setActiveProject);
   const [formError, setFormError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const isEditMode = !!project;
 
@@ -138,7 +141,10 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
       if (isEditMode && project) {
         await updateProject(project.id, data);
       } else {
-        await createProject(data);
+        const created = await createProject(data);
+        // Immediately activate and navigate to the new project's upload phase
+        setActiveProject(created.id);
+        navigate(`/project/${created.id}/upload`);
       }
       onOpenChange(false);
     } catch {

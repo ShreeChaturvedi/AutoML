@@ -12,12 +12,16 @@ export type Phase =
   | 'feature-engineering'
   | 'training'
   | 'experiments'
-  | 'deployment'
-  | 'chat';
+  | 'deployment';
 
 /**
  * Phase configuration for each workflow stage
  * Defines the icon, label, description, and order
+ * 
+ * Note: The "chat" phase was removed. AI assistance is now embedded:
+ * - Preprocessing: Control panel UI with AI suggestions
+ * - Feature Engineering: Control panel with AI suggestions
+ * - Training: Jupyter-style interface with chat + code cells
  */
 export interface PhaseConfig {
   icon: string; // lucide-react icon name
@@ -38,26 +42,26 @@ export const phaseConfig: Record<Phase, PhaseConfig> = {
   },
   'data-viewer': {
     icon: 'Table',
-    label: 'Data Viewer',
-    description: 'Explore and query your data',
+    label: 'Data Explorer',
+    description: 'Explore, query, and analyze your data',
     order: 1
   },
   'preprocessing': {
     icon: 'Workflow',
     label: 'Preprocessing',
-    description: 'Clean and transform data',
+    description: 'AI-powered data cleaning and transformation',
     order: 2
   },
   'feature-engineering': {
     icon: 'Wrench',
     label: 'Feature Engineering',
-    description: 'Create and select features',
+    description: 'Create and select predictive features',
     order: 3
   },
   'training': {
     icon: 'Play',
     label: 'Model Training',
-    description: 'Train and fine-tune models',
+    description: 'Train models with AI assistance',
     order: 4
   },
   'experiments': {
@@ -71,12 +75,6 @@ export const phaseConfig: Record<Phase, PhaseConfig> = {
     label: 'Deployment',
     description: 'Deploy models to production',
     order: 6
-  },
-  'chat': {
-    icon: 'MessageSquare',
-    label: 'AI Assistant',
-    description: 'Chat with policy-aware AI',
-    order: 7
   }
 };
 

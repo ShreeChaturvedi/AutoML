@@ -1,38 +1,24 @@
 /**
- * DataUploadPanel - Enhanced file upload interface
+ * DataUploadPanel - Backend-integrated file upload interface
  *
  * Features:
- * - Beautiful drag-and-drop area with visual feedback
- * - Multiple file support with file type validation
- * - File cards with preview, type badges, and size display
- * - Remove and preview actions
- * - Proceed button to move to next workflow step
- * - Empty state with clear instructions
- * - Uploaded files organized in responsive grid
- *
- * Design Philosophy:
- * - Professional, polished aesthetic
- * - Clear visual hierarchy
- * - Smooth animations and transitions
- * - Handles edge cases (long file names, many files, etc.)
- *
- * TODO: Backend integration for file storage
+ * - Drag-and-drop upload with backend persistence
+ * - Automatic dataset upload to Postgres
+ * - File hydration on mount (loads persisted files)
+ * - Upload status tracking
+ * - Delete with backend sync
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, Database, FileStack } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useDataStore } from '@/stores/dataStore';
-import { useProjectStore } from '@/stores/projectStore';
-import { ContinueButton } from '@/components/layout/ContinueButton';
-import { getDuckDB } from '@/lib/duckdb';
 import type { UploadedFile } from '@/types/file';
 import { getFileType } from '@/types/file';
 import { FileCard } from './FileCard';
-import Papa from 'papaparse';
 import { uploadDatasetFile } from '@/lib/api/datasets';
 
 // Accepted file types (data files and context documents only - NO images)
@@ -55,35 +41,83 @@ interface DataUploadPanelProps {
 }
 
 export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [isParsingFiles, setIsParsingFiles] = useState(false);
-  const addFile = useDataStore((state) => state.addFile);
-  const setFileMetadata = useDataStore((state) => state.setFileMetadata);
-  const projects = useProjectStore((state) => state.projects);
-  const project = projects.find(p => p.id === projectId);
   const [datasetUploadStatus, setDatasetUploadStatus] = useState<Record<string, 'uploading' | 'uploaded' | 'error'>>({});
   const [datasetUploadErrors, setDatasetUploadErrors] = useState<Record<string, string>>({});
 
-  const onDrop = (acceptedFiles: File[]) => {
-    const newFiles: UploadedFile[] = acceptedFiles.map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      type: getFileType(file),
-      size: file.size,
-      uploadedAt: new Date(),
-      projectId: projectId,
-      file
-    }));
+  const addFile = useDataStore((state) => state.addFile);
+  const setFileMetadata = useDataStore((state) => state.setFileMetadata);
+  const hydrateFromBackend = useDataStore((state) => state.hydrateFromBackend);
+  const allFiles = useDataStore((state) => state.files);
 
-    setUploadedFiles((prev) => [...prev, ...newFiles]);
-    newFiles.forEach((file) => addFile(file));
+  // Filter files for this project using useMemo to avoid infinite loops
+  const projectFiles = useMemo(
+    () => allFiles.filter((file) => file.projectId === projectId),
+    [allFiles, projectId]
+  );
 
-    newFiles
-      .filter((file) => ['csv', 'json', 'excel'].includes(file.type))
-      .forEach((file) => {
-        void uploadDatasetToBackend(file);
+  // Hydrate files from backend on mount
+  useEffect(() => {
+    if (projectId) {
+      void hydrateFromBackend(projectId);
+    }
+  }, [projectId, hydrateFromBackend]);
+
+  // Upload dataset files to backend
+  const uploadDatasetToBackend = useCallback(
+    async (file: UploadedFile) => {
+      setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'uploading' }));
+
+      try {
+        const response = await uploadDatasetFile(file.file!, projectId);
+        const dataset = response.dataset;
+
+        // Update file metadata with backend info
+        setFileMetadata(file.id, {
+          datasetId: dataset.datasetId,
+          tableName: dataset.tableName,
+          rowCount: dataset.n_rows,
+          columnCount: dataset.n_cols,
+          columns: dataset.columns
+        });
+
+        setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'uploaded' }));
+        console.log(`[DataUploadPanel] ✅ Uploaded ${file.name} to backend`);
+      } catch (error) {
+        console.error(`[DataUploadPanel] Failed to upload ${file.name}:`, error);
+        setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'error' }));
+        setDatasetUploadErrors((prev) => ({
+          ...prev,
+          [file.id]: error instanceof Error ? error.message : 'Upload failed'
+        }));
+      }
+    },
+    [projectId, setFileMetadata]
+  );
+
+  // Handle file drop
+  const onDrop = useCallback(
+    (acceptedFiles: File[]) => {
+      const newFiles: UploadedFile[] = acceptedFiles.map((file) => ({
+        id: crypto.randomUUID(),
+        name: file.name,
+        type: getFileType(file),
+        size: file.size,
+        uploadedAt: new Date(),
+        projectId: projectId,
+        file
+      }));
+
+      // Add to store
+      newFiles.forEach((file) => {
+        addFile(file);
+        // Auto-upload dataset files
+        if (['csv', 'json', 'excel'].includes(file.type)) {
+          void uploadDatasetToBackend(file);
+        }
       });
-  };
+    },
+    [projectId, addFile, uploadDatasetToBackend]
+  );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -91,148 +125,35 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
     multiple: true
   });
 
-  const handleRemoveFile = (fileId: string) => {
-    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
-    useDataStore.getState().removeFile(fileId);
-    setDatasetUploadStatus((prev) => {
-      const next = { ...prev };
-      delete next[fileId];
-      return next;
-    });
-    setDatasetUploadErrors((prev) => {
-      const next = { ...prev };
-      delete next[fileId];
-      return next;
-    });
-  };
-
-  const uploadDatasetToBackend = useCallback(
-    async (file: UploadedFile) => {
-      setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'uploading' }));
-      setDatasetUploadErrors((prev) => {
+  const handleRemoveFile = async (fileId: string) => {
+    try {
+      await useDataStore.getState().deleteFile(fileId);
+      setDatasetUploadStatus((prev) => {
         const next = { ...prev };
-        delete next[file.id];
+        delete next[fileId];
         return next;
       });
-
-      try {
-        const response = await uploadDatasetFile(file.file, projectId);
-        const dataset = response.dataset;
-
-        setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'uploaded' }));
-        setFileMetadata(file.id, {
-          datasetId: dataset.datasetId,
-          rowCount: dataset.n_rows,
-          columnCount: dataset.n_cols,
-          columns: dataset.columns,
-          datasetProfile: {
-            nRows: dataset.n_rows,
-            nCols: dataset.n_cols,
-            dtypes: dataset.dtypes,
-            nullCounts: dataset.null_counts
-          }
-        });
-      } catch (error) {
-        console.error(`Failed to sync ${file.name} with backend`, error);
-        setDatasetUploadStatus((prev) => ({ ...prev, [file.id]: 'error' }));
-        const message = error instanceof Error ? error.message : 'Failed to upload dataset';
-        setDatasetUploadErrors((prev) => ({ ...prev, [file.id]: message }));
-      }
-    },
-    [projectId, setFileMetadata]
-  );
-
-  // Automatically parse CSV files when uploaded
-  useEffect(() => {
-    const csvFiles = uploadedFiles.filter((f) => f.type === 'csv');
-
-    if (csvFiles.length > 0) {
-      setIsParsingFiles(true);
-      const addPreview = useDataStore.getState().addPreview;
-
-      // Parse all CSVs
-      const parsePromises = csvFiles.map((csvFile) => {
-        // Check if already parsed
-        const existingPreview = useDataStore.getState().previews.find(
-          (p) => p.fileId === csvFile.id
-        );
-
-        if (existingPreview) {
-          return Promise.resolve();
-        }
-
-        return new Promise<void>((resolve) => {
-          Papa.parse(csvFile.file, {
-            header: true,
-            complete: async (results) => {
-              const headers = results.meta.fields || [];
-              const allRows = results.data as Record<string, unknown>[];
-
-              addPreview({
-                fileId: csvFile.id,
-                headers,
-                rows: allRows.slice(0, 50),
-                totalRows: allRows.length,
-                previewRows: Math.min(50, allRows.length)
-              });
-
-              // Load table into DuckDB for querying
-              try {
-                const duckdb = getDuckDB();
-                await duckdb.loadTable(csvFile.id, csvFile.file);
-                console.log(`Loaded ${csvFile.name} into DuckDB`);
-              } catch (error) {
-                console.error(`Failed to load ${csvFile.name} into DuckDB:`, error);
-                // Continue anyway - preview will still work
-              }
-
-              resolve();
-            },
-            error: (error) => {
-              console.error(`Error parsing CSV ${csvFile.name}:`, error);
-              resolve();
-            }
-          });
-        });
+      setDatasetUploadErrors((prev) => {
+        const next = { ...prev };
+        delete next[fileId];
+        return next;
       });
-
-      // Wait for all CSVs to parse
-      Promise.all(parsePromises).then(() => {
-        setIsParsingFiles(false);
-
-        // Create initial artifacts for each CSV
-        const createArtifact = useDataStore.getState().createArtifact;
-        const previews = useDataStore.getState().previews;
-
-        csvFiles.forEach((csvFile) => {
-          const preview = previews.find((p) => p.fileId === csvFile.id);
-          if (preview && project) {
-            const duckdb = getDuckDB();
-            const tableMetadata = duckdb.getTableByFileId(csvFile.id);
-            const tableName = tableMetadata?.tableName || csvFile.name.replace(/\.[^/.]+$/, '');
-            const query = `-- Preview of ${csvFile.name}\nSELECT * FROM ${tableName} LIMIT ${preview.previewRows}`;
-
-            // Check if artifact already exists
-            const existingArtifact = useDataStore.getState().queryArtifacts.find(
-              (a) => a.name === csvFile.name && a.projectId === project.id
-            );
-
-            if (!existingArtifact) {
-              createArtifact(query, 'sql', preview, project.id, csvFile.name);
-            }
-          }
-        });
-      });
+    } catch (error) {
+      console.error('[DataUploadPanel] Failed to delete file:', error);
+      setDatasetUploadErrors((prev) => ({
+        ...prev,
+        [fileId]: 'Failed to delete file from server'
+      }));
     }
-  }, [uploadedFiles, project]);
+  };
 
   // Count file types
-  const dataFiles = uploadedFiles.filter(f => ['csv', 'json', 'excel'].includes(f.type));
-  const contextFiles = uploadedFiles.filter(f => ['pdf', 'other'].includes(f.type));
-  const isUploadingDatasets = Object.values(datasetUploadStatus).some((status) => status === 'uploading');
+  const dataFiles = projectFiles.filter(f => ['csv', 'json', 'excel'].includes(f.type));
+  const contextFiles = projectFiles.filter(f => ['pdf', 'markdown', 'word', 'text', 'other'].includes(f.type));
+  const isUploading = Object.values(datasetUploadStatus).some(status => status === 'uploading');
 
   return (
-    <Card data-testid="data-upload-panel" className="h-full flex flex-col border-0 shadow-none">
+    <Card className="h-full flex flex-col border-0 shadow-none">
       <CardHeader className="space-y-2">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
@@ -246,16 +167,9 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
               </CardDescription>
             </div>
           </div>
-          {uploadedFiles.length > 0 && !isParsingFiles && !isUploadingDatasets && (
-            <ContinueButton
-              currentPhase="upload"
-              projectId={projectId}
-              disabled={false}
-            />
-          )}
-          {(isParsingFiles || isUploadingDatasets) && (
+          {isUploading && (
             <Badge variant="secondary" className="text-xs">
-              {isUploadingDatasets ? 'Syncing datasets with backend...' : 'Parsing files...'}
+              Uploading...
             </Badge>
           )}
         </div>
@@ -304,7 +218,7 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
         </div>
 
         {/* Uploaded Files Section */}
-        {uploadedFiles.length > 0 && (
+        {projectFiles.length > 0 && (
           <div className="flex-1 flex flex-col space-y-3 min-h-0">
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -324,14 +238,14 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
                 </div>
               </div>
               <span className="text-xs text-muted-foreground">
-                {uploadedFiles.length} total
+                {projectFiles.length} total
               </span>
             </div>
 
             {/* File Grid - Scrollable */}
             <div className="flex-1 overflow-y-auto scrollbar-hide">
               <div className="grid grid-cols-1 gap-3">
-                {uploadedFiles.map((file) => (
+                {projectFiles.map((file) => (
                   <FileCard
                     key={file.id}
                     file={file}

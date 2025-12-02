@@ -18,11 +18,11 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import type { UploadedFile } from '@/types/file';
 import { formatFileSize } from '@/types/file';
 import Papa from 'papaparse';
 import { Badge } from '@/components/ui/badge';
+import { getDatasetSample } from '@/lib/api/datasets';
 
 interface FilePreviewProps {
   file: UploadedFile;
@@ -36,6 +36,72 @@ export function FilePreview({ file, open, onOpenChange }: FilePreviewProps) {
 
   useEffect(() => {
     if (!open) return;
+
+    // For hydrated files from backend (no file object), fetch sample from API
+    if (!file.file && file.metadata?.datasetId && (file.type === 'csv' || file.type === 'json' || file.type === 'excel')) {
+      setIsLoading(true);
+      void getDatasetSample(file.metadata.datasetId)
+        .then((data) => {
+          setPreviewContent(
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Showing sample from persisted dataset ({data.rowCount.toLocaleString()} total rows)
+              </p>
+              <div className="rounded-lg border overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      {data.columns.map((header, i) => (
+                        <th key={i} className="px-3 py-2 text-left font-medium text-muted-foreground">
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.sample.map((row, i) => (
+                      <tr key={i} className="border-t">
+                        {data.columns.map((header, j) => (
+                          <td key={j} className="px-3 py-2 font-mono text-xs">
+                            {String(row[header] ?? '')}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+          setIsLoading(false);
+        })
+        .catch((error) => {
+          console.error('Failed to fetch dataset sample:', error);
+          setPreviewContent(
+            <div className="p-6 text-center space-y-2">
+              <p className="text-sm text-destructive">Failed to load dataset preview</p>
+              <p className="text-xs text-muted-foreground">
+                Use the Data Viewer tab to explore this dataset.
+              </p>
+            </div>
+          );
+          setIsLoading(false);
+        });
+      return;
+    }
+
+    // For non-tabular hydrated files, show message
+    if (!file.file) {
+      setPreviewContent(
+        <div className="p-6 text-center space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Preview not available for this file type.
+          </p>
+        </div>
+      );
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
 
@@ -147,7 +213,7 @@ export function FilePreview({ file, open, onOpenChange }: FilePreviewProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[70vh]">
+        <div className="max-h-[70vh] overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
@@ -155,7 +221,7 @@ export function FilePreview({ file, open, onOpenChange }: FilePreviewProps) {
           ) : (
             <div className="pr-4">{previewContent}</div>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
