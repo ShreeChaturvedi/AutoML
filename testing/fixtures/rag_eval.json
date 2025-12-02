@@ -6,7 +6,72 @@
   },
   {
     "question": "Which sprint covers retrieval augmented generation?",
-    "expectedPhrases": ["sprint four"],
+    "expectedPhrases": ["sprint 4"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "Which sprint implements feature engineering?",
+    "expectedPhrases": ["sprint 5"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "Which workspaces make up the monorepo?",
+    "expectedPhrases": ["backend", "frontend", "testing"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "What database backs the query services?",
+    "expectedPhrases": ["postgres"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "What framework powers the API server?",
+    "expectedPhrases": ["express"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "Which tooling builds the frontend UI?",
+    "expectedPhrases": ["vite"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "How do you run the Playwright benchmark?",
+    "expectedPhrases": ["npm run benchmark"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "How do you install dependencies for all workspaces?",
+    "expectedPhrases": ["npm --prefix backend install"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "What file types are supported for document uploads?",
+    "expectedPhrases": ["pdf", "markdown"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "What UI library handles EDA charts?",
+    "expectedPhrases": ["recharts"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "How does the system respond to repeated queries?",
+    "expectedPhrases": ["cache"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "Can natural language be converted to SQL?",
+    "expectedPhrases": ["natural language", "sql"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "What Node version is required?",
+    "expectedPhrases": ["node 22"],
+    "projectId": "00000000-0000-0000-0000-000000000000"
+  },
+  {
+    "question": "Which docker port mapping is suggested for Postgres?",
+    "expectedPhrases": ["5433"],
     "projectId": "00000000-0000-0000-0000-000000000000"
   }
 ]
