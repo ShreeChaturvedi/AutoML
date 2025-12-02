@@ -4,15 +4,16 @@ import { dirname } from 'node:path';
 
 import { z } from 'zod';
 
+import { getDbPool, hasDatabaseConfiguration } from '../db.js';
 import type { CreateProjectInput, Project, ProjectMetadata, PhaseValue } from '../types/project.js';
 
 export interface ProjectRepository {
-  list(): Project[];
-  getById(id: string): Project | undefined;
-  create(input: CreateProjectInput): Project;
-  update(id: string, input: Partial<CreateProjectInput>): Project | undefined;
-  delete(id: string): boolean;
-  clear(): void;
+  list(): Promise<Project[]>;
+  getById(id: string): Promise<Project | undefined>;
+  create(input: CreateProjectInput): Promise<Project>;
+  update(id: string, input: Partial<CreateProjectInput>): Promise<Project | undefined>;
+  delete(id: string): Promise<boolean>;
+  clear(): Promise<void>;
 }
 
 export class InMemoryProjectRepository implements ProjectRepository {
@@ -24,15 +25,15 @@ export class InMemoryProjectRepository implements ProjectRepository {
     });
   }
 
-  list(): Project[] {
+  async list(): Promise<Project[]> {
     return Array.from(this.projects.values());
   }
 
-  getById(id: string): Project | undefined {
+  async getById(id: string): Promise<Project | undefined> {
     return this.projects.get(id);
   }
 
-  create(input: CreateProjectInput): Project {
+  async create(input: CreateProjectInput): Promise<Project> {
     const now = new Date().toISOString();
     const project: Project = {
       id: randomUUID(),
@@ -49,7 +50,7 @@ export class InMemoryProjectRepository implements ProjectRepository {
     return project;
   }
 
-  update(id: string, input: Partial<CreateProjectInput>): Project | undefined {
+  async update(id: string, input: Partial<CreateProjectInput>): Promise<Project | undefined> {
     const existing = this.projects.get(id);
     if (!existing) return undefined;
 
@@ -64,11 +65,11 @@ export class InMemoryProjectRepository implements ProjectRepository {
     return updated;
   }
 
-  delete(id: string): boolean {
+  async delete(id: string): Promise<boolean> {
     return this.projects.delete(id);
   }
 
-  clear(): void {
+  async clear(): Promise<void> {
     this.projects.clear();
   }
 }
@@ -80,8 +81,7 @@ export const PHASE_VALUES = [
   'feature-engineering',
   'training',
   'experiments',
-  'deployment',
-  'chat'
+  'deployment'
 ] as const satisfies readonly PhaseValue[];
 
 const phaseSchema = z.enum(PHASE_VALUES);
@@ -199,43 +199,180 @@ export class FileProjectRepository extends InMemoryProjectRepository {
     this.filePath = filePath;
 
     if (!existsSync(filePath)) {
-      persistProjects(this.filePath, this.list());
+      void this.persist();
     }
   }
 
-  override create(input: CreateProjectInput): Project {
-    const project = super.create(input);
-    persistProjects(this.filePath, this.list());
+  private async persist() {
+    const projects = await this.list();
+    persistProjects(this.filePath, projects);
+  }
+
+  override async create(input: CreateProjectInput): Promise<Project> {
+    const project = await super.create(input);
+    await this.persist();
     return project;
   }
 
-  override update(id: string, input: Partial<CreateProjectInput>): Project | undefined {
-    const project = super.update(id, input);
+  override async update(id: string, input: Partial<CreateProjectInput>): Promise<Project | undefined> {
+    const project = await super.update(id, input);
     if (project) {
-      persistProjects(this.filePath, this.list());
+      await this.persist();
     }
     return project;
   }
 
-  override delete(id: string): boolean {
-    const deleted = super.delete(id);
+  override async delete(id: string): Promise<boolean> {
+    const deleted = await super.delete(id);
     if (deleted) {
-      persistProjects(this.filePath, this.list());
+      await this.persist();
     }
     return deleted;
   }
 
-  override clear(): void {
-    super.clear();
-    persistProjects(this.filePath, this.list());
+  override async clear(): Promise<void> {
+    await super.clear();
+    await this.persist();
   }
 }
 
 export function createProjectRepository(storagePath: string): ProjectRepository {
+  // Use Postgres when available to maintain foreign key integrity with datasets
+  if (hasDatabaseConfiguration()) {
+    try {
+      console.log('[projectRepository] Using Postgres backend');
+      return new PgProjectRepository();
+    } catch (error) {
+      console.error('[projectRepository] Postgres failed, falling back to file storage', error);
+    }
+  }
+
+  // Fallback to file-based storage
   try {
+    console.log('[projectRepository] Using file-based storage');
     return new FileProjectRepository(storagePath);
   } catch (error) {
     console.error('[projectRepository] Falling back to in-memory storage', error);
     return new InMemoryProjectRepository();
+  }
+}
+
+class PgProjectRepository implements ProjectRepository {
+  private readonly table = 'projects';
+
+  async list(): Promise<Project[]> {
+    const pool = getDbPool();
+    const result = await pool.query(
+      `SELECT project_id, name, description, metadata, created_at, updated_at FROM ${this.table} ORDER BY created_at ASC`
+    );
+
+    return result.rows.map((row) => ({
+      id: row.project_id,
+      name: row.name,
+      description: row.description ?? undefined,
+      icon: undefined,
+      color: undefined,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+      metadata: sanitizeMetadata(row.metadata ?? undefined)
+    }));
+  }
+
+  async getById(id: string): Promise<Project | undefined> {
+    const pool = getDbPool();
+    const result = await pool.query(
+      `SELECT project_id, name, description, metadata, created_at, updated_at FROM ${this.table} WHERE project_id = $1`,
+      [id]
+    );
+    if (result.rowCount === 0) {
+      return undefined;
+    }
+    const row = result.rows[0];
+    return {
+      id: row.project_id,
+      name: row.name,
+      description: row.description ?? undefined,
+      icon: undefined,
+      color: undefined,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+      metadata: sanitizeMetadata(row.metadata ?? undefined)
+    };
+  }
+
+  async create(input: CreateProjectInput): Promise<Project> {
+    const pool = getDbPool();
+    const id = randomUUID();
+    const metadata = sanitizeMetadata(input.metadata);
+
+    const result = await pool.query(
+      `INSERT INTO ${this.table} (project_id, name, description, metadata)
+       VALUES ($1, $2, $3, $4)
+       RETURNING project_id, name, description, metadata, created_at, updated_at`,
+      [id, input.name, input.description ?? null, metadata ?? {}]
+    );
+
+    const row = result.rows[0];
+    return {
+      id: row.project_id,
+      name: row.name,
+      description: row.description ?? undefined,
+      icon: undefined,
+      color: undefined,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+      metadata: sanitizeMetadata(row.metadata ?? undefined)
+    };
+  }
+
+  async update(id: string, input: Partial<CreateProjectInput>): Promise<Project | undefined> {
+    const existing = await this.getById(id);
+    if (!existing) {
+      return undefined;
+    }
+
+    const pool = getDbPool();
+    const mergedMetadata = sanitizeMetadata({
+      ...(existing.metadata ?? {}),
+      ...(input.metadata ?? {})
+    });
+
+    const result = await pool.query(
+      `UPDATE ${this.table}
+       SET name = COALESCE($2, name),
+           description = COALESCE($3, description),
+           metadata = $4,
+           updated_at = NOW()
+       WHERE project_id = $1
+       RETURNING project_id, name, description, metadata, created_at, updated_at`,
+      [id, input.name ?? null, input.description ?? null, mergedMetadata ?? {}]
+    );
+
+    if (result.rowCount === 0) {
+      return undefined;
+    }
+
+    const row = result.rows[0];
+    return {
+      id: row.project_id,
+      name: row.name,
+      description: row.description ?? undefined,
+      icon: undefined,
+      color: undefined,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+      metadata: sanitizeMetadata(row.metadata ?? undefined)
+    };
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const pool = getDbPool();
+    const result = await pool.query(`DELETE FROM ${this.table} WHERE project_id = $1`, [id]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async clear(): Promise<void> {
+    const pool = getDbPool();
+    await pool.query(`DELETE FROM ${this.table}`);
   }
 }

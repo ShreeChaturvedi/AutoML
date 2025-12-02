@@ -5,8 +5,7 @@ export type PhaseValue =
   | 'feature-engineering'
   | 'training'
   | 'experiments'
-  | 'deployment'
-  | 'chat';
+  | 'deployment';
 
 export interface ProjectMetadata {
   unlockedPhases?: PhaseValue[];
