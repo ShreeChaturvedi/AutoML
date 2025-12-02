@@ -14,26 +14,31 @@ const metadataSchema = z
   .catchall(z.unknown())
   .optional();
 
-const projectInputSchema = z.object({
-  name: z.string().min(1, 'name is required'),
-  description: z.string().max(1000).optional(),
-  icon: z.string().min(1).optional(),
-  color: z.string().min(1).optional(),
-  metadata: metadataSchema
-});
+// Be deliberately permissive on project creation/update so that
+// frontend payload quirks never block the UI with 400s.
+const projectInputSchema = z
+  .object({
+    name: z.string().min(1, 'name is required'),
+    description: z.string().optional(),
+    icon: z.string().optional(),
+    color: z.string().optional(),
+    metadata: metadataSchema
+  })
+  .catchall(z.unknown());
 
 export function registerProjectRoutes(router: Router, repository: ProjectRepository) {
-  router.get('/projects', (_req, res) => {
-    res.json({ projects: repository.list() });
+  router.get('/projects', async (_req, res) => {
+    const projects = await repository.list();
+    res.json({ projects });
   });
 
-  router.delete('/projects/reset', (_req, res) => {
-    repository.clear();
+  router.delete('/projects/reset', async (_req, res) => {
+    await repository.clear();
     res.status(204).send();
   });
 
-  router.get('/projects/:id', (req, res) => {
-    const project = repository.getById(req.params.id);
+  router.get('/projects/:id', async (req, res) => {
+    const project = await repository.getById(req.params.id);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -41,24 +46,24 @@ export function registerProjectRoutes(router: Router, repository: ProjectReposit
     return res.json({ project });
   });
 
-  router.post('/projects', (req, res) => {
+  router.post('/projects', async (req, res) => {
     const result = projectInputSchema.safeParse(req.body);
     if (!result.success) {
       return res.status(400).json({ errors: result.error.flatten() });
     }
 
-    const project = repository.create(result.data);
+    const project = await repository.create(result.data);
     console.log(`[projects] created ${project.id} (${project.name})`);
     return res.status(201).json({ project });
   });
 
-  router.patch('/projects/:id', (req, res) => {
+  router.patch('/projects/:id', async (req, res) => {
     const result = projectInputSchema.partial().safeParse(req.body);
     if (!result.success) {
       return res.status(400).json({ errors: result.error.flatten() });
     }
 
-    const project = repository.update(req.params.id, result.data);
+    const project = await repository.update(req.params.id, result.data);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -67,8 +72,8 @@ export function registerProjectRoutes(router: Router, repository: ProjectReposit
     return res.json({ project });
   });
 
-  router.delete('/projects/:id', (req, res) => {
-    const deleted = repository.delete(req.params.id);
+  router.delete('/projects/:id', async (req, res) => {
+    const deleted = await repository.delete(req.params.id);
     if (!deleted) {
       return res.status(404).json({ error: 'Project not found' });
     }

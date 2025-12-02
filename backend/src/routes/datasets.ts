@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
 import { Router } from 'express';
@@ -6,9 +6,11 @@ import multer from 'multer';
 import { z } from 'zod';
 
 import { env } from '../config.js';
+import { getDbPool, hasDatabaseConfiguration } from '../db.js';
 import type { DatasetRepository } from '../repositories/datasetRepository.js';
 import { createDatasetRepository } from '../repositories/datasetRepository.js';
 import { profileDataset } from '../services/datasetProfiler.js';
+import { loadDatasetIntoPostgres } from '../services/datasetLoader.js';
 import type { DatasetFileType } from '../types/dataset.js';
 
 const upload = multer({
@@ -47,8 +49,37 @@ export function createDatasetUploadRouter(repository?: DatasetRepository) {
   const router = Router();
   const datasetRepository = repository ?? createDatasetRepository(env.datasetMetadataPath);
 
-  router.get('/datasets', (_req, res) => {
-    res.json({ datasets: datasetRepository.list() });
+  router.get('/datasets', async (req, res) => {
+    const projectId = req.query.projectId as string | undefined;
+    let datasets = await datasetRepository.list();
+
+    // Filter by projectId if provided
+    if (projectId) {
+      datasets = datasets.filter(d => d.projectId === projectId);
+    }
+
+    res.json({ datasets });
+  });
+
+  router.get('/datasets/:datasetId/sample', async (req, res) => {
+    const { datasetId } = req.params;
+
+    try {
+      const dataset = await datasetRepository.getById(datasetId);
+      if (!dataset) {
+        return res.status(404).json({ error: 'Dataset not found' });
+      }
+
+      // Return the sample data that was already profiled during upload
+      res.json({
+        sample: dataset.sample,
+        columns: dataset.columns.map(c => c.name),
+        rowCount: dataset.nRows
+      });
+    } catch (error) {
+      console.error(`[datasets] Failed to get sample for ${datasetId}`, error);
+      return res.status(500).json({ error: 'Failed to retrieve dataset sample' });
+    }
   });
 
   router.post(
@@ -72,7 +103,7 @@ export function createDatasetUploadRouter(repository?: DatasetRepository) {
       try {
         const profiling = profileDataset(req.file.buffer, fileType);
 
-        const dataset = datasetRepository.create({
+        const dataset = await datasetRepository.create({
           projectId: parseResult.data.projectId,
           filename: req.file.originalname,
           fileType,
@@ -89,8 +120,16 @@ export function createDatasetUploadRouter(repository?: DatasetRepository) {
         const filePath = join(datasetDir, req.file.originalname);
         writeFileSync(filePath, req.file.buffer);
 
+        const { tableName, rowsLoaded } = await loadDatasetIntoPostgres({
+          datasetId: dataset.datasetId,
+          filename: req.file.originalname,
+          fileType,
+          buffer: req.file.buffer,
+          columns: profiling.columns
+        });
+
         console.log(
-          `[datasets] stored ${req.file.originalname} (${fileType}) as ${dataset.datasetId}`
+          `[datasets] Stored ${req.file.originalname} (${fileType}) -> table "${tableName}" (${rowsLoaded} rows)`
         );
 
         return res.status(201).json({
@@ -105,16 +144,127 @@ export function createDatasetUploadRouter(repository?: DatasetRepository) {
             dtypes: Object.fromEntries(dataset.columns.map((column) => [column.name, column.dtype])),
             null_counts: Object.fromEntries(dataset.columns.map((column) => [column.name, column.nullCount])),
             sample: dataset.sample,
-            createdAt: dataset.createdAt
+            createdAt: dataset.createdAt,
+            tableName
           }
         });
       } catch (error) {
-        console.error('[datasetUpload] failed to process dataset', error);
-        console.log(`[datasets] error processing ${req.file.originalname}`);
-        return res.status(400).json({ error: 'Failed to process dataset. Ensure the file format is valid.' });
+        console.error('[datasets] Upload failed:', error instanceof Error ? error.message : String(error));
+        return res.status(400).json({
+          error: 'Failed to process dataset. Ensure the file format is valid.',
+          details: error instanceof Error ? error.message : String(error)
+        });
       }
     }
   );
+
+  // Migration endpoint: Create tables for existing datasets
+  router.post('/datasets/migrate', async (req, res) => {
+    try {
+      const datasets = await datasetRepository.list();
+
+      const results = {
+        migrated: [] as string[],
+        skipped: [] as string[],
+        errors: [] as { datasetId: string; error: string }[]
+      };
+
+      for (const dataset of datasets) {
+        try {
+          const datasetDir = join(env.datasetStorageDir, dataset.datasetId);
+          const filePath = join(datasetDir, dataset.filename);
+
+          if (!existsSync(filePath)) {
+            results.skipped.push(dataset.datasetId);
+            continue;
+          }
+
+          const buffer = readFileSync(filePath);
+          const { tableName, rowsLoaded } = await loadDatasetIntoPostgres({
+            datasetId: dataset.datasetId,
+            filename: dataset.filename,
+            fileType: dataset.fileType,
+            buffer,
+            columns: dataset.columns
+          });
+
+          console.log(`[datasets] Migrated ${dataset.filename} -> "${tableName}" (${rowsLoaded} rows)`);
+          results.migrated.push(dataset.datasetId);
+
+        } catch (error) {
+          console.error(`[datasets] Migration failed for ${dataset.filename}:`, error instanceof Error ? error.message : String(error));
+          results.errors.push({
+            datasetId: dataset.datasetId,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+
+      console.log(`[datasets] Migration complete: ${results.migrated.length} migrated, ${results.skipped.length} skipped, ${results.errors.length} errors`);
+
+      return res.json({
+        success: true,
+        results
+      });
+
+    } catch (error) {
+      console.error('[datasets] Migration failed:', error instanceof Error ? error.message : String(error));
+      return res.status(500).json({
+        error: 'Migration failed',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Delete dataset endpoint
+  router.delete('/datasets/:datasetId', async (req, res) => {
+    const { datasetId } = req.params;
+
+    try {
+      const dataset = await datasetRepository.getById(datasetId);
+      if (!dataset) {
+        return res.status(404).json({ error: 'Dataset not found' });
+      }
+
+      const deleted = await datasetRepository.delete(datasetId);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Dataset not found' });
+      }
+
+      // Delete physical files
+      const datasetDir = join(env.datasetStorageDir, datasetId);
+      if (existsSync(datasetDir)) {
+        rmSync(datasetDir, { recursive: true, force: true });
+      }
+
+      // Drop Postgres table if it exists
+      if (hasDatabaseConfiguration()) {
+        try {
+          const pool = getDbPool();
+          const tableName = dataset.filename
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[^a-zA-Z0-9_]/g, '_')
+            .replace(/^[^a-zA-Z]/, 'table_')
+            .toLowerCase()
+            .slice(0, 63);
+
+          await pool.query(`DROP TABLE IF EXISTS "${tableName}"`);
+        } catch (error) {
+          console.error(`[datasets] Failed to drop table:`, error instanceof Error ? error.message : String(error));
+        }
+      }
+
+      console.log(`[datasets] Deleted ${datasetId}`);
+      return res.json({ success: true });
+
+    } catch (error) {
+      console.error(`[datasets] Delete failed:`, error instanceof Error ? error.message : String(error));
+      return res.status(500).json({
+        error: 'Failed to delete dataset',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   return router;
 }

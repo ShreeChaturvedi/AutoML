@@ -9,6 +9,7 @@ import { createAnswerRouter } from './routes/answer.js';
 import { createDatasetUploadRouter } from './routes/datasets.js';
 import { createDocumentRouter } from './routes/documents.js';
 import { registerHealthRoutes } from './routes/health.js';
+import { createPreprocessingRouter } from './routes/preprocessing.js';
 import { registerProjectRoutes } from './routes/projects.js';
 import { createQueryRouter } from './routes/query.js';
 
@@ -35,6 +36,7 @@ export function createApp() {
   router.use(createDocumentRouter());
   router.use(createQueryRouter());
   router.use(createAnswerRouter());
+  router.use(createPreprocessingRouter());
 
   app.use('/api', router);
 

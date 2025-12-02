@@ -21,8 +21,10 @@ export function createQueryRouter() {
   const router = Router();
 
   router.post('/query/sql', async (req, res) => {
+    console.log('[query/sql] Request body:', req.body);
     const result = sqlQuerySchema.safeParse(req.body);
     if (!result.success) {
+      console.log('[query/sql] Validation error:', result.error.flatten());
       return res.status(400).json({ errors: result.error.flatten() });
     }
 
