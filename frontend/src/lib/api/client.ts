@@ -40,12 +40,15 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const response = await fetch(url, requestInit);
 
   if (!response.ok) {
+    // Clone response first so we can try JSON then fallback to text
+    const cloned = response.clone();
     let payload: unknown;
     try {
       payload = await response.json();
     } catch {
-      payload = await response.text();
+      payload = await cloned.text();
     }
+    console.error(`[API Error] ${method} ${url} - Status ${response.status}`, payload);
     throw new ApiError(`Request to ${url} failed with status ${response.status}`, response.status, payload);
   }
 
