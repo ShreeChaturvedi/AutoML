@@ -12,6 +12,7 @@ import {
     getSession,
     destroySession,
     installPackage,
+    installPackageWithProgress,
     listPackages,
     getAvailableRuntimes,
     getHealth
@@ -199,6 +200,61 @@ router.get('/packages/suggest', async (req: Request, res: Response) => {
             error: 'Failed to search packages',
             message: error instanceof Error ? error.message : 'Unknown error'
         });
+    }
+});
+
+/**
+ * POST /api/execute/packages/stream
+ * Install a package with streaming progress
+ */
+router.post('/packages/stream', async (req: Request, res: Response) => {
+    try {
+        const parsed = packageSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({
+                error: 'Invalid request',
+                details: parsed.error.issues
+            });
+            return;
+        }
+
+        res.status(200);
+        res.setHeader('Content-Type', 'application/x-ndjson');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders?.();
+
+        const sendEvent = (payload: Record<string, unknown>) => {
+            res.write(`${JSON.stringify(payload)}\n`);
+        };
+
+        const result = await installPackageWithProgress(
+            parsed.data.sessionId,
+            parsed.data.packageName,
+            (event) => sendEvent(event)
+        );
+
+        sendEvent({
+            type: 'done',
+            success: result.success,
+            message: result.message
+        });
+        res.end();
+    } catch (error) {
+        console.error('[execution] Stream install error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                error: 'Failed to install package',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+            return;
+        }
+        res.write(`${JSON.stringify({
+            type: 'done',
+            success: false,
+            message: error instanceof Error ? error.message : 'Unknown error'
+        })}\n`);
+        res.end();
     }
 });
 

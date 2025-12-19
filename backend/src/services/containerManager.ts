@@ -136,6 +136,9 @@ async function ensureRuntimeImage(pythonVersion: PythonVersion): Promise<string>
 
         console.log(`[containerManager] Building runtime image: ${imageName}`);
         const buildArgs = ['build', '--build-arg', `PYTHON_VERSION=${pythonVersion}`];
+        if (env.executionDockerPlatform) {
+            buildArgs.push('--platform', env.executionDockerPlatform);
+        }
         Array.from(tags).forEach((tag) => {
             buildArgs.push('-t', tag);
         });
@@ -197,6 +200,7 @@ export async function createContainer(config: ContainerConfig): Promise<Containe
         '-e', 'PIP_CACHE_DIR=/workspace/.cache/pip',
         '-e', 'PIP_DISABLE_PIP_VERSION_CHECK=1',
         '-e', 'TMPDIR=/workspace/.tmp',
+        ...(env.executionDockerPlatform ? ['--platform', env.executionDockerPlatform] : []),
         imageName,
         'tail', '-f', '/dev/null' // keep container running
     ];
@@ -536,6 +540,75 @@ export async function listPackages(container: Container): Promise<PackageInfo[]>
     }
 }
 
+export type PackageInstallEvent = {
+    type: 'progress' | 'log';
+    progress?: number;
+    stage?: string;
+    message?: string;
+};
+
+export async function installPackageStream(
+    container: Container,
+    packageName: string,
+    onEvent: (event: PackageInstallEvent) => void
+): Promise<{ success: boolean; message: string }> {
+    const { requirements, aliasNotice } = normalizePackageInput(packageName);
+    if (requirements.length === 0) {
+        return { success: false, message: 'No valid package name provided.' };
+    }
+
+    const baseArgs = [
+        'exec',
+        container.containerId,
+        'python',
+        '-m',
+        'pip',
+        'install',
+        '--prefer-binary',
+        '--no-cache-dir',
+        '--target',
+        '/workspace/.python'
+    ];
+
+    onEvent({ type: 'progress', progress: 8, stage: 'Checking wheels' });
+
+    const binaryAttempt = await runPipInstallStream(
+        [...baseArgs, '--only-binary', ':all:', ...requirements],
+        onEvent
+    );
+
+    if (binaryAttempt.success) {
+        return {
+            success: true,
+            message: `${aliasNotice}Successfully installed ${requirements.join(', ')}`
+        };
+    }
+
+    if (isMissingBinaryError(binaryAttempt.details)) {
+        return {
+            success: false,
+            message: `${aliasNotice}No compatible binary wheels found for ${requirements.join(', ')} on this runtime.`
+                + ' Try another package or build a custom runtime image.'
+        };
+    }
+
+    onEvent({ type: 'progress', progress: 35, stage: 'Building from source' });
+
+    const sourceAttempt = await runPipInstallStream([...baseArgs, ...requirements], onEvent);
+
+    if (sourceAttempt.success) {
+        return {
+            success: true,
+            message: `${aliasNotice}Successfully installed ${requirements.join(', ')}`
+        };
+    }
+
+    return {
+        success: false,
+        message: `${aliasNotice}${formatInstallError(sourceAttempt.details, requirements)}`
+    };
+}
+
 async function runPipInstall(args: string[]): Promise<{
     success: boolean;
     message?: string;
@@ -549,6 +622,76 @@ async function runPipInstall(args: string[]): Promise<{
         const details = [err.stderr, err.stdout, err.message].filter(Boolean).join('\n');
         return { success: false, details };
     }
+}
+
+async function runPipInstallStream(
+    args: string[],
+    onEvent: (event: PackageInstallEvent) => void
+): Promise<{
+    success: boolean;
+    message?: string;
+    details: string;
+}> {
+    const progressMarkers = [
+        { match: /Collecting/i, progress: 15, stage: 'Collecting' },
+        { match: /Downloading/i, progress: 35, stage: 'Downloading' },
+        { match: /Building wheels?/i, progress: 60, stage: 'Building wheels' },
+        { match: /Installing collected packages/i, progress: 85, stage: 'Installing' },
+        { match: /Successfully installed/i, progress: 100, stage: 'Completed' }
+    ];
+
+    return new Promise((resolve) => {
+        const proc = spawn('docker', args);
+        const outputLines: string[] = [];
+        let currentProgress = 0;
+
+        const handleLine = (line: string) => {
+            const trimmed = line.trim();
+            if (!trimmed) return;
+            outputLines.push(trimmed);
+            onEvent({ type: 'log', message: trimmed });
+
+            for (const marker of progressMarkers) {
+                if (marker.match.test(trimmed) && marker.progress > currentProgress) {
+                    currentProgress = marker.progress;
+                    onEvent({ type: 'progress', progress: currentProgress, stage: marker.stage });
+                }
+            }
+        };
+
+        const pump = (stream: NodeJS.ReadableStream) => {
+            let buffer = '';
+            stream.on('data', (chunk) => {
+                buffer += chunk.toString();
+                const lines = buffer.split(/\r?\n/);
+                buffer = lines.pop() ?? '';
+                lines.forEach(handleLine);
+            });
+            stream.on('end', () => {
+                if (buffer.trim()) {
+                    handleLine(buffer);
+                }
+            });
+        };
+
+        pump(proc.stdout);
+        pump(proc.stderr);
+
+        proc.on('close', (code) => {
+            const details = outputLines.join('\n');
+            resolve({
+                success: code === 0,
+                message: outputLines.slice(-2).join(' '),
+                details
+            });
+        });
+        proc.on('error', (error) => {
+            resolve({
+                success: false,
+                details: error instanceof Error ? error.message : 'Failed to start pip install process'
+            });
+        });
+    });
 }
 
 function isMissingBinaryError(details: string): boolean {

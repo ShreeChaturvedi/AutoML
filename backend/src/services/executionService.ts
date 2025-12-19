@@ -19,9 +19,11 @@ import {
     getOrCreateContainer,
     executeInContainer,
     installPackage as containerInstallPackage,
+    installPackageStream as containerInstallPackageStream,
     listPackages as containerListPackages,
     destroyContainer,
-    getContainer
+    getContainer,
+    type PackageInstallEvent
 } from './containerManager.js';
 import { syncWorkspaceDatasets } from './executionWorkspace.js';
 import { env } from '../config.js';
@@ -196,6 +198,36 @@ export async function installPackage(
     }
 
     const result = await containerInstallPackage(container, packageName);
+    if (result.success) {
+        session.installedPackages = await containerListPackages(container);
+    }
+
+    return result;
+}
+
+export async function installPackageWithProgress(
+    sessionId: string,
+    packageName: string,
+    onEvent: (event: PackageInstallEvent) => void
+): Promise<{ success: boolean; message: string }> {
+    const session = sessions.get(sessionId);
+    if (!session) {
+        return { success: false, message: 'Session not found' };
+    }
+
+    if (!session.containerId) {
+        return {
+            success: false,
+            message: 'Cloud runtime is unavailable for this session.'
+        };
+    }
+
+    const container = getContainer(session.containerId);
+    if (!container) {
+        return { success: false, message: 'Container not found' };
+    }
+
+    const result = await containerInstallPackageStream(container, packageName, onEvent);
     if (result.success) {
         session.installedPackages = await containerListPackages(container);
     }
