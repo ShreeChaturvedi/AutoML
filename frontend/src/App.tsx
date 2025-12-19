@@ -18,11 +18,24 @@ import { DataViewerTab } from '@/components/data/DataViewerTab';
 import { PreprocessingPanel } from '@/components/preprocessing/PreprocessingPanel';
 import { FeatureEngineeringPanel } from '@/components/features/FeatureEngineeringPanel';
 import { TrainingPanel } from '@/components/training/TrainingPanel';
+import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
+import { GoogleOAuthCallback } from '@/components/auth/GoogleOAuthCallback';
+import { LoginForm } from '@/components/auth/LoginForm';
+import { ProfileSettings } from '@/components/auth/ProfileSettings';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
+import { SignupForm } from '@/components/auth/SignupForm';
 import { useProjectStore } from '@/stores/projectStore';
+import { useAuthStore } from '@/stores/authStore';
 import { FolderOpen, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectDialog } from '@/components/projects/ProjectDialog';
 import type { Phase } from '@/types/phase';
+import { getCurrentUser } from '@/lib/api/auth';
+import { initMonaco } from '@/lib/monaco/preloader';
+
+// Pre-load Monaco editor in the background to eliminate flash on code cells
+initMonaco().catch(console.error);
 
 // Home page - shown when no project is selected
 function HomePage() {
@@ -221,7 +234,7 @@ function ProjectWorkspace() {
   }
 }
 
-function App() {
+function MainApp() {
   const isInitialized = useProjectStore((state) => state.isInitialized);
   const isLoading = useProjectStore((state) => state.isLoading);
   const error = useProjectStore((state) => state.error);
@@ -267,9 +280,86 @@ function App() {
   }
 
   return (
+    <AppShell>{content}</AppShell>
+  );
+}
+
+function App() {
+  const [authReady, setAuthReady] = useState(false);
+  const setUser = useAuthStore((state) => state.setUser);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
+  const setLoading = useAuthStore((state) => state.setLoading);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const bootstrapAuth = async () => {
+      const { accessToken, refreshToken } = useAuthStore.getState();
+      if (!accessToken && !refreshToken) {
+        setLoading(false);
+        setAuthReady(true);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await getCurrentUser();
+        if (isMounted) {
+          setUser(response.user);
+        }
+      } catch {
+        if (isMounted) {
+          clearAuth();
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+          setAuthReady(true);
+        }
+      }
+    };
+
+    void bootstrapAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [setUser, clearAuth, setLoading]);
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen w-full bg-background text-foreground flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">Checking session...</p>
+      </div>
+    );
+  }
+
+  return (
     <BrowserRouter>
       <div className="min-h-screen w-full bg-background text-foreground">
-        <AppShell>{content}</AppShell>
+        <Routes>
+          <Route path="/login" element={<LoginForm />} />
+          <Route path="/signup" element={<SignupForm />} />
+          <Route path="/forgot-password" element={<ForgotPasswordForm />} />
+          <Route path="/reset-password" element={<ResetPasswordForm />} />
+          {/* Profile is a dedicated full-page route outside AppShell */}
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfileSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <MainApp />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
       </div>
     </BrowserRouter>
   );

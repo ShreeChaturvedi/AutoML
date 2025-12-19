@@ -2,7 +2,7 @@
  * FeatureCreationDialog - Dialog for creating new features from templates
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { 
   Dialog, 
@@ -32,7 +32,8 @@ import {
   FEATURE_TEMPLATES, 
   getTemplatesByCategory, 
   featureCategoryConfig,
-  type FeatureCategory
+  type FeatureCategory,
+  type FeatureTemplate
 } from '@/types/feature';
 import { useFeatureStore } from '@/stores/featureStore';
 import { cn } from '@/lib/utils';
@@ -64,6 +65,20 @@ export function FeatureCreationDialog({
 
   const templatesByCategory = useMemo(() => getTemplatesByCategory(), []);
 
+  const buildDefaultParams = useCallback((template: FeatureTemplate | undefined, sourceColumnName: string) => {
+    if (!template?.params) return {};
+    const columnNames = columns.map((col) => col.columnName);
+    const fallbackColumn = columnNames[0] ?? '';
+    const secondaryCandidates = columnNames.filter((name) => name !== sourceColumnName);
+    const columnDefault = secondaryCandidates[0] ?? fallbackColumn;
+
+    const nextParams: Record<string, unknown> = {};
+    for (const [key, config] of Object.entries(template.params)) {
+      nextParams[key] = config.type === 'column' ? columnDefault : config.default;
+    }
+    return nextParams;
+  }, [columns]);
+
   // Find the selected template
   const template = useMemo(
     () => FEATURE_TEMPLATES.find((item) => item.id === templateId),
@@ -84,28 +99,16 @@ export function FeatureCreationDialog({
     setDescription('');
     
     // Initialize params from template defaults
-    if (foundTemplate?.params) {
-      const initialParams: Record<string, unknown> = {};
-      for (const [key, config] of Object.entries(foundTemplate.params)) {
-        initialParams[key] = config.default;
-      }
-      setParams(initialParams);
-    } else {
-      setParams({});
-    }
-  }, [columns, open, presetColumn, presetTemplateId]);
+    setParams(buildDefaultParams(foundTemplate, initialColumn));
+  }, [columns, open, presetColumn, presetTemplateId, buildDefaultParams]);
 
   // Update params when template changes
   useEffect(() => {
-    if (template?.params) {
-      const newParams: Record<string, unknown> = {};
-      for (const [key, config] of Object.entries(template.params)) {
-        newParams[key] = config.default;
-      }
-      setParams(newParams);
+    setParams(buildDefaultParams(template, column));
+    if (template) {
       setDescription('');
     }
-  }, [template]);
+  }, [template, column, buildDefaultParams]);
 
   const derivedName = useMemo(() => {
     if (featureName) return featureName;
@@ -123,9 +126,15 @@ export function FeatureCreationDialog({
   const handleSubmit = () => {
     if (!template || !column) return;
 
+    const secondaryColumn =
+      typeof params.secondaryColumn === 'string' && params.secondaryColumn.length > 0
+        ? params.secondaryColumn
+        : undefined;
+
     addFeature({
       projectId,
       sourceColumn: column,
+      secondaryColumn,
       featureName: derivedName || `${column}_${template.method}`,
       description: description || template.description,
       method: template.method,
@@ -135,6 +144,14 @@ export function FeatureCreationDialog({
 
     onOpenChange(false);
   };
+
+  const requiresSecondaryColumn = template?.method === 'ratio'
+    || template?.method === 'difference'
+    || template?.method === 'product';
+  const requiresTargetColumn = template?.method === 'target_encode';
+  const missingSecondary = requiresSecondaryColumn && !params.secondaryColumn;
+  const missingTarget = requiresTargetColumn && !params.targetColumn;
+  const canSubmit = Boolean(template && column && !missingSecondary && !missingTarget);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -363,6 +380,32 @@ export function FeatureCreationDialog({
                               </SelectContent>
                             </Select>
                           )}
+
+                          {config.type === 'column' && (
+                            <Select
+                              value={String(params[key] ?? '')}
+                              onValueChange={(value) => handleParamChange(key, value)}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Select column" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(columns.filter((col) => col.columnName !== column).length > 0
+                                  ? columns.filter((col) => col.columnName !== column)
+                                  : columns
+                                ).map((col) => (
+                                  <SelectItem key={col.columnName} value={col.columnName}>
+                                    <div className="flex items-center gap-2">
+                                      <span>{col.columnName}</span>
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {col.dataType}
+                                      </Badge>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -408,7 +451,7 @@ export function FeatureCreationDialog({
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={!template || !column}
+            disabled={!canSubmit}
             className="gap-2"
           >
             <Sparkles className="h-4 w-4" />

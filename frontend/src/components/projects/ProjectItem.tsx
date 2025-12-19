@@ -7,8 +7,8 @@
  * - Right-click context menu (edit, delete)
  * - Click to select project and navigate to it
  *
- * NOTE: This component is currently not actively used in the UI.
- * The sidebar now shows phases for the active project instead of a project list.
+ * Renders inside ProjectList when no project is active. When a project is active,
+ * the sidebar switches to PhaseList.
  */
 
 import { useState } from 'react';

@@ -1,0 +1,59 @@
+/* RuntimeToggle animations - stroke drawing effects only */
+
+/* Path drawing animation using stroke-dashoffset */
+@keyframes draw-path {
+    from {
+        stroke-dashoffset: var(--path-length, 100);
+    }
+
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* Continuous path tracing for globe longitude */
+@keyframes trace-longitude {
+    0% {
+        stroke-dashoffset: 60;
+    }
+
+    50% {
+        stroke-dashoffset: 0;
+    }
+
+    100% {
+        stroke-dashoffset: -60;
+    }
+}
+
+/* Active icon glow */
+.runtime-icon--active {
+    filter: drop-shadow(0 0 3px currentColor);
+}
+
+/* Globe longitude line traces continuously */
+.globe-longitude {
+    stroke-dasharray: 60;
+    animation: trace-longitude 3s linear infinite;
+}
+
+/* Globe equator draws on mount */
+.globe-equator {
+    stroke-dasharray: 63;
+    stroke-dashoffset: 63;
+    animation: draw-path 1.5s ease-out forwards;
+}
+
+/* Globe circle draws on mount */
+.globe-circle {
+    stroke-dasharray: 63;
+    stroke-dashoffset: 63;
+    animation: draw-path 1s ease-out forwards;
+}
+
+/* Cloud path draws on mount */
+.cloud-path {
+    stroke-dasharray: 80;
+    stroke-dashoffset: 80;
+    animation: draw-path 1.2s ease-out forwards;
+}

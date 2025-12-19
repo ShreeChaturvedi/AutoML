@@ -46,7 +46,7 @@ interface DataState {
   setFileMetadata: (fileId: string, metadata: Partial<FileMetadata>) => void;
 
   // Hydration actions
-  hydrateFromBackend: (projectId: string) => Promise<void>;
+  hydrateFromBackend: (projectId: string, options?: { force?: boolean }) => Promise<void>;
 
   // Query artifact actions
   createArtifact: (
@@ -71,6 +71,25 @@ interface DataState {
 
   // File tab actions
   setActiveFileTab: (id: string | null, type: 'file' | 'artifact' | null) => void;
+}
+
+function sanitizeTableName(filename: string, datasetId: string): string {
+  const baseName = filename.replace(/\.[^/.]+$/, '');
+  let safe = baseName
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .replace(/^[^a-zA-Z]/, 'table_')
+    .toLowerCase();
+
+  if (!safe) {
+    safe = 'table_data';
+  }
+
+  const suffix = datasetId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+  const separator = suffix ? `_${suffix}` : '';
+  const maxBaseLength = 63 - separator.length;
+  const trimmed = safe.slice(0, maxBaseLength);
+
+  return `${trimmed || 'table_data'}${separator}`;
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
@@ -246,11 +265,12 @@ export const useDataStore = create<DataState>((set, get) => ({
   },
 
   // Hydration - Load persisted datasets from backend
-  async hydrateFromBackend(projectId: string) {
+  async hydrateFromBackend(projectId: string, options) {
     const state = get();
+    const force = options?.force ?? false;
 
     // Skip if already hydrated for this project or currently hydrating
-    if (state.hydratedProjects.has(projectId) || state.isHydrating) {
+    if ((!force && state.hydratedProjects.has(projectId)) || state.isHydrating) {
       return;
     }
 
@@ -278,6 +298,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             rowCount: dataset.nRows,
             columnCount: dataset.nCols,
             columns: dataset.columns.map(c => c.name),
+            tableName: dataset.tableName ?? dataset.metadata?.tableName ?? sanitizeTableName(dataset.filename, dataset.datasetId),
             datasetProfile: {
               nRows: dataset.nRows,
               nCols: dataset.nCols,

@@ -17,10 +17,9 @@ export interface ParsedDocument {
 
 export async function parseDocument(buffer: Buffer, mimeType?: string): Promise<ParsedDocument> {
   if (mimeType?.includes('pdf')) {
-    const parser = await resolvePdfParser();
-    const parsed = await parser(buffer);
+    const text = await parsePdfBuffer(buffer);
     return {
-      text: parsed.text ?? '',
+      text,
       mimeType: mimeType ?? 'application/pdf',
       type: 'pdf'
     };
@@ -43,9 +42,29 @@ export async function parseDocument(buffer: Buffer, mimeType?: string): Promise<
   };
 }
 
-type PdfParser = (data: Buffer | Uint8Array, options?: unknown) => Promise<{ text?: string }>;
+/**
+ * Parse PDF buffer using pdf-parse v2 API
+ * pdf-parse v2 exports PDFParse class that needs to be instantiated
+ */
+async function parsePdfBuffer(buffer: Buffer): Promise<string> {
+  try {
+    // pdf-parse v2 exports PDFParse class
+    const { PDFParse } = await import('pdf-parse');
 
-async function resolvePdfParser(): Promise<PdfParser> {
-  const pdfModule = (await import('pdf-parse')) as unknown as PdfParser & { default?: PdfParser };
-  return pdfModule.default ?? (pdfModule as PdfParser);
+    // Create parser instance with the buffer data
+    const parser = new PDFParse({ data: buffer });
+
+    // Get text content from PDF
+    const result = await parser.getText();
+
+    // Cleanup
+    await parser.destroy();
+
+    // result.text contains the full document text
+    return result.text ?? '';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[documentParser] PDF parsing failed:', message);
+    throw new Error(`Failed to parse PDF: ${message}`);
+  }
 }

@@ -47,6 +47,12 @@ export interface DatasetProfile {
   sample: Record<string, unknown>[];
   createdAt: string;
   updatedAt: string;
+  tableName?: string;
+  metadata?: {
+    tableName?: string;
+    rowsLoaded?: number;
+    [key: string]: unknown;
+  };
 }
 
 export async function listDatasets(projectId?: string) {
@@ -64,4 +70,18 @@ export async function getDatasetSample(datasetId: string) {
 
 export async function deleteDataset(datasetId: string) {
   return apiRequest<{ success: boolean }>(`/datasets/${datasetId}`, { method: 'DELETE' });
+}
+
+/**
+ * Download raw dataset file content for mounting in Pyodide
+ */
+export async function downloadDataset(datasetId: string): Promise<ArrayBuffer> {
+  const BASE_URL = (import.meta.env.VITE_API_BASE ?? 'http://localhost:4000/api').replace(/\/$/, '');
+  const response = await fetch(`${BASE_URL}/datasets/${datasetId}/download`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to download dataset: ${response.statusText}`);
+  }
+
+  return response.arrayBuffer();
 }

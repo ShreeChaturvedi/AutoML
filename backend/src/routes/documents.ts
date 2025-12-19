@@ -56,8 +56,18 @@ export function createDocumentRouter() {
         }
       });
     } catch (error) {
-      console.error('[documents] failed to ingest', error);
-      return res.status(500).json({ error: 'Failed to ingest document' });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error('[documents] failed to ingest:', errorMessage);
+      if (errorStack) {
+        console.error('[documents] stack:', errorStack);
+      }
+
+      // Return more specific error message for debugging
+      return res.status(500).json({
+        error: 'Failed to ingest document',
+        details: process.env.NODE_ENV !== 'production' ? errorMessage : undefined
+      });
     }
   });
 

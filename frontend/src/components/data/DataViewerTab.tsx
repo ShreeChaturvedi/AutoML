@@ -13,7 +13,7 @@ import { FileTabBar } from './FileTabBar';
 import { DataTable } from './DataTable';
 import { useDataStore } from '@/stores/dataStore';
 import { useProjectStore } from '@/stores/projectStore';
-import { executeSqlQuery } from '@/lib/api/query';
+import { executeNlQuery, executeSqlQuery } from '@/lib/api/query';
 import type { QueryMode, DataPreview } from '@/types/file';
 
 export function DataViewerTab() {
@@ -78,7 +78,38 @@ export function DataViewerTab() {
       setQueryError(null);
 
       try {
-        // Execute query using backend Postgres
+        if (mode === 'english') {
+          const response = await executeNlQuery({
+            projectId: activeProject.id,
+            query,
+            tableName: tableNames[0]
+          });
+          const nl = response.nl;
+          const queryResult = nl.query;
+
+          const dataPreview: DataPreview = {
+            fileId: 'query-result',
+            headers: queryResult.columns.map((col) => col.name),
+            rows: queryResult.rows,
+            totalRows: queryResult.rowCount,
+            previewRows: queryResult.rowCount,
+            eda: queryResult.eda
+          };
+
+          const artifactId = createArtifact(query, mode, dataPreview, activeProject.id, {
+            eda: queryResult.eda,
+            cached: queryResult.cached,
+            executionMs: queryResult.executionMs,
+            cacheTimestamp: queryResult.cacheTimestamp,
+            generatedSql: nl.sql,
+            rationale: nl.rationale
+          });
+
+          setActiveFileTab(artifactId, 'artifact');
+          return;
+        }
+
+        // Execute SQL using backend Postgres
         const result = await executeSqlQuery({ projectId: activeProject.id, sql: query });
 
         // Convert backend QueryResult to DataPreview format
@@ -96,7 +127,7 @@ export function DataViewerTab() {
           eda: result.query.eda,
           cached: result.query.cached,
           executionMs: result.query.executionMs,
-          cacheTimestamp: result.query.cached ? new Date().toISOString() : undefined
+          cacheTimestamp: result.query.cacheTimestamp
         });
 
         // Switch to the new artifact tab
@@ -131,7 +162,7 @@ export function DataViewerTab() {
         setIsExecuting(false);
       }
     },
-    [activeProject, createArtifact, setActiveFileTab]
+    [activeProject, createArtifact, setActiveFileTab, tableNames]
   );
 
   if (previews.length === 0) {
@@ -168,7 +199,13 @@ export function DataViewerTab() {
             queryInfo={{
               query: artifact.query,
               mode: artifact.mode,
-              timestamp: artifact.timestamp
+              timestamp: artifact.timestamp,
+              eda: artifact.eda,
+              cached: artifact.cached,
+              executionMs: artifact.executionMs,
+              cacheTimestamp: artifact.cacheTimestamp,
+              generatedSql: artifact.generatedSql,
+              rationale: artifact.rationale
             }}
           />
         );

@@ -13,7 +13,7 @@
 
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { PanelLeftClose, PanelLeftOpen, ChevronRight } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, ChevronRight, FolderKanban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -52,8 +52,19 @@ export function AppShell({ children }: AppShellProps) {
   // Parse phase from URL pathname (source of truth)
   // URL format: /project/:projectId/:phase
   const pathParts = location.pathname.split('/').filter(Boolean);
+  const isProjectRoute = pathParts[0] === 'project' && pathParts.length >= 2;
   const currentPhaseFromURL = pathParts.length >= 3 ? (pathParts[2] as Phase) : undefined;
   const currentPhase = currentPhaseFromURL || activeProject?.currentPhase;
+
+  // Get the last unlocked phase
+  const lastUnlockedPhase = unlockedPhases.length > 0 ? unlockedPhases[unlockedPhases.length - 1] : null;
+
+  // Only show ContinueButton on the last unlocked phase (when user hasn't moved on yet)
+  const showContinueButton = isProjectRoute
+    && activeProject
+    && currentPhase
+    && currentPhase === lastUnlockedPhase
+    && getNextPhase(currentPhase);
 
   const handlePhaseClick = (phase: Phase) => {
     if (activeProjectId) {
@@ -83,7 +94,7 @@ export function AppShell({ children }: AppShellProps) {
               variant="ghost"
               size="icon"
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="h-8 w-8 shrink-0"
+              className="h-9 w-9 shrink-0 relative z-10"
             >
               {sidebarCollapsed ? (
                 <PanelLeftOpen className="h-4 w-4" />
@@ -96,19 +107,20 @@ export function AppShell({ children }: AppShellProps) {
             <Separator orientation="vertical" className="h-6 shrink-0" />
 
             {/* Phase Progression Breadcrumb */}
-            {activeProject && unlockedPhases.length > 0 && (
+            {isProjectRoute && activeProject && unlockedPhases.length > 0 && (
               <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="flex-wrap">
                   <BreadcrumbItem>
                     <BreadcrumbLink
                       href={`/project/${activeProjectId}/${unlockedPhases[0]}`}
-                      className="text-sm hover:text-foreground max-w-[120px] truncate"
+                      className="text-sm hover:text-foreground max-w-[120px] truncate flex items-center gap-1"
                       onClick={(e) => {
                         e.preventDefault();
                         const firstPhase = unlockedPhases[0];
                         handlePhaseClick(firstPhase);
                       }}
                     >
+                      <FolderKanban className="h-3.5 w-3.5 flex-shrink-0" />
                       {activeProject.title}
                     </BreadcrumbLink>
                   </BreadcrumbItem>
@@ -142,8 +154,8 @@ export function AppShell({ children }: AppShellProps) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Continue Button - only show if there's a next phase */}
-            {activeProject && currentPhase && getNextPhase(currentPhase) && (
+            {/* Continue Button - only show on last unlocked phase */}
+            {showContinueButton && (
               <ContinueButton
                 currentPhase={currentPhase}
                 projectId={activeProject.id}

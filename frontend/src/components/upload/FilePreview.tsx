@@ -107,7 +107,7 @@ export function FilePreview({ file, open, onOpenChange }: FilePreviewProps) {
 
     // Generate preview based on file type
     switch (file.type) {
-      case 'pdf':
+      case 'pdf': {
         const pdfUrl = URL.createObjectURL(file.file);
         setPreviewContent(
           <iframe
@@ -118,6 +118,7 @@ export function FilePreview({ file, open, onOpenChange }: FilePreviewProps) {
           />
         );
         break;
+      }
 
       case 'csv':
         Papa.parse(file.file, {
@@ -176,7 +177,7 @@ export function FilePreview({ file, open, onOpenChange }: FilePreviewProps) {
                 {JSON.stringify(json, null, 2)}
               </pre>
             );
-          } catch (error) {
+          } catch {
             setPreviewContent(
               <p className="text-sm text-destructive">Error parsing JSON</p>
             );

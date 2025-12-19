@@ -15,26 +15,29 @@ export interface SearchResult {
   chunkId: string;
   documentId: string;
   filename: string;
-  chunkIndex: number;
-  content: string;
   score: number;
+  snippet: string;
+  span: { start: number; end: number };
 }
 
 export interface AnswerCitation {
   chunkId: string;
   documentId: string;
   filename: string;
-  chunkIndex: number;
-  content: string;
+  span: { start: number; end: number };
 }
 
 export interface AnswerResponse {
   answer: {
-    status: 'ok' | 'no_chunks' | 'error';
+    status: 'ok' | 'not_found';
     answer: string;
     citations: AnswerCitation[];
-    cached: boolean;
-    cacheTimestamp?: string;
+    meta: {
+      cached: boolean;
+      latencyMs: number;
+      chunksConsidered: number;
+      cacheTimestamp?: string;
+    };
   };
 }
 

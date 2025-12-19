@@ -9,6 +9,7 @@ interface FeatureState {
   toggleFeature: (id: string) => void;
   removeFeature: (id: string) => void;
   getFeaturesByProject: (projectId: string) => FeatureSpec[];
+  hydrateFromProject: (projectId: string, options?: { force?: boolean }) => void;
   syncFeaturesToProject: (projectId: string) => Promise<void>;
 }
 
@@ -21,6 +22,46 @@ function makeId() {
 
 export const useFeatureStore = create<FeatureState>()((set, get) => ({
   features: [],
+
+  hydrateFromProject(projectId, options) {
+    const force = options?.force ?? false;
+    const state = get();
+    if (!force && state.features.some((feature) => feature.projectId === projectId)) {
+      return;
+    }
+
+    const projectStore = useProjectStore.getState();
+    const project = projectStore.getProjectById(projectId);
+    const rawFeatures = Array.isArray(project?.metadata?.features)
+      ? (project?.metadata?.features as FeatureSpec[])
+      : [];
+
+    const normalized = rawFeatures
+      .filter((feature) => feature && typeof feature === 'object')
+      .map((feature) => {
+        const secondaryFromParams =
+          typeof feature.params?.secondaryColumn === 'string'
+            ? feature.params.secondaryColumn
+            : undefined;
+
+        return {
+          ...feature,
+          id: feature.id ?? makeId(),
+          projectId: feature.projectId ?? projectId,
+          secondaryColumn: feature.secondaryColumn ?? secondaryFromParams,
+          featureName: feature.featureName || `${feature.sourceColumn}_${feature.method}`,
+          enabled: feature.enabled ?? true,
+          createdAt: feature.createdAt ?? new Date().toISOString()
+        };
+      });
+
+    set((state) => ({
+      features: [
+        ...state.features.filter((feature) => feature.projectId !== projectId),
+        ...normalized
+      ]
+    }));
+  },
 
   addFeature(featureInput) {
     const feature: FeatureSpec = {

@@ -2,7 +2,16 @@ import { config as loadEnv } from 'dotenv';
 
 loadEnv();
 
-const DEFAULT_ORIGINS = ['http://localhost:5173'];
+const DEFAULT_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:4173',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175',
+  'http://127.0.0.1:4173'
+];
 
 function parseOrigins(value: string | undefined): string[] {
   if (!value) return DEFAULT_ORIGINS;
@@ -44,5 +53,35 @@ export const env = {
   queryCacheMaxEntries: parseInteger(process.env.QUERY_CACHE_MAX_ENTRIES, 500),
   docChunkSize: parseInteger(process.env.DOC_CHUNK_SIZE, 500),
   docChunkOverlap: parseInteger(process.env.DOC_CHUNK_OVERLAP, 50),
-  answerCacheTtlMs: parseInteger(process.env.ANSWER_CACHE_TTL_MS, 2 * 60 * 1000)
+  answerCacheTtlMs: parseInteger(process.env.ANSWER_CACHE_TTL_MS, 2 * 60 * 1000),
+
+  // Execution Environment
+  executionTimeoutMs: parseInteger(process.env.EXECUTION_TIMEOUT_MS, 30000),
+  executionMaxMemoryMb: parseInteger(process.env.EXECUTION_MAX_MEMORY_MB, 2048),
+  executionMaxCpuPercent: parseInteger(process.env.EXECUTION_MAX_CPU_PERCENT, 100),
+  dockerEnabled: process.env.DOCKER_ENABLED !== 'false',
+  dockerImage: process.env.DOCKER_IMAGE ?? 'automl-python-runtime:latest',
+  executionNetwork: process.env.EXECUTION_NETWORK ?? 'bridge',
+  executionAutoBuildImage: process.env.EXECUTION_AUTO_BUILD_IMAGE !== 'false',
+  executionWorkspaceDir: process.env.EXECUTION_WORKSPACE_DIR ?? 'storage/workspaces',
+
+  // Authentication
+  jwtSecret: process.env.JWT_SECRET ?? 'dev-secret-change-in-production',
+  bcryptRounds: parseInteger(process.env.BCRYPT_ROUNDS, 12),
+  jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
+  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
+  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+
+  // Email (SMTP)
+  smtpHost: process.env.SMTP_HOST ?? '',
+  smtpPort: parseInteger(process.env.SMTP_PORT, 587),
+  smtpSecure: process.env.SMTP_SECURE === 'true',
+  smtpUser: process.env.SMTP_USER ?? '',
+  smtpPassword: process.env.SMTP_PASSWORD ?? '',
+  smtpFrom: process.env.SMTP_FROM ?? 'AutoML Toolchain <noreply@example.com>',
+
+  // Google OAuth
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+  googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:5173/auth/google/callback'
 };

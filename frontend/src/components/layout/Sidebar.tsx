@@ -46,33 +46,45 @@ export function Sidebar({ collapsed }: SidebarProps) {
   return (
     <div className="flex h-full w-full flex-col">
       {/* Current Project Header */}
-      <div className="flex h-14 items-center px-4">
+      <div className="flex h-14 items-center justify-between px-4">
         {activeProject ? (
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            {/* Project Icon */}
-            <div
-              className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-md shrink-0',
-                projectColorClasses[activeProject.color].bg
-              )}
-            >
-              {(() => {
-                const IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[
-                  activeProject.icon
-                ];
-                return IconComponent ? (
-                  <IconComponent
-                    className={cn('h-4 w-4', projectColorClasses[activeProject.color].text)}
-                  />
-                ) : null;
-              })()}
+          <>
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {/* Project Icon */}
+              <div
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-md shrink-0',
+                  projectColorClasses[activeProject.color].bg
+                )}
+              >
+                {(() => {
+                  const IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[
+                    activeProject.icon
+                  ];
+                  return IconComponent ? (
+                    <IconComponent
+                      className={cn('h-4 w-4', projectColorClasses[activeProject.color].text)}
+                    />
+                  ) : null;
+                })()}
+              </div>
+
+              {/* Project Title */}
+              <span className="text-sm font-semibold text-foreground truncate">
+                {activeProject.title}
+              </span>
             </div>
 
-            {/* Project Title */}
-            <span className="text-sm font-semibold text-foreground truncate">
-              {activeProject.title}
-            </span>
-          </div>
+            {/* Back button - icon only */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleBackToProjects}
+              title="Back to Projects"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </Button>
+          </>
         ) : (
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -84,24 +96,6 @@ export function Sidebar({ collapsed }: SidebarProps) {
       </div>
 
       <Separator />
-
-      {/* Back to Projects Button (only when project is active) */}
-      {activeProject && (
-        <>
-          <div className="px-4 pt-3 pb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBackToProjects}
-              className="w-full justify-start h-9"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Projects
-            </Button>
-          </div>
-          <Separator />
-        </>
-      )}
 
       {/* Main Content Section */}
       <div className="flex-1 overflow-hidden">

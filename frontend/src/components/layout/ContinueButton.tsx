@@ -57,13 +57,14 @@ export function ContinueButton({
 
   return (
     <Button
+      variant="secondary"
       size="lg"
       onClick={handleContinue}
       disabled={disabled}
       className={cn('gap-2', className)}
     >
-      Continue to {phaseConfig[nextPhase].label}
-      <ArrowRight className="h-5 w-5" />
+      {phaseConfig[nextPhase].label}
+      <ArrowRight className="h-4 w-4" />
     </Button>
   );
 }

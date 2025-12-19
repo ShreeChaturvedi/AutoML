@@ -39,7 +39,7 @@ export function createPreprocessingRouter() {
       return res.status(503).json({ error: 'Database is not configured' });
     }
 
-    const { projectId, tableName, sampleSize } = result.data;
+    const { tableName, sampleSize } = result.data;
 
     try {
       const pool = getDbPool();
@@ -110,7 +110,8 @@ export function createPreprocessingRouter() {
       return res.status(503).json({ error: 'Database is not configured' });
     }
 
-    const projectId = req.query.projectId as string | undefined;
+    // Note: projectId from query params reserved for future filtering by project
+    void req.query.projectId;
 
     try {
       const pool = getDbPool();
@@ -141,5 +142,7 @@ export function createPreprocessingRouter() {
 
   return router;
 }
+
+
 
 

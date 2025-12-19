@@ -9,17 +9,48 @@
  * - Execute button
  *
  * Design decisions documented in:
- * frontend/documentation/design/data-viewer-system.md
+ * docs/design-system.md
  */
 
 import { useState, useCallback, Suspense, lazy, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Textarea } from '@/components/ui/textarea';
-import { Play, Loader2, MessageSquare, Code2, PanelRightClose, PanelRight } from 'lucide-react';
+import { Loader2, MessageSquare, Code2, PanelRightClose, PanelRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/theme-provider';
 import type { QueryMode } from '@/types/file';
+
+// Animated lightning bolt icon for execute button
+function AnimatedExecuteIcon({ isExecuting }: { isExecuting: boolean }) {
+  if (isExecuting) {
+    return <Loader2 className="h-4 w-4 animate-spin" />;
+  }
+  return (
+    <svg
+      className="h-4 w-4 execute-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <defs>
+        <linearGradient id="executeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#60a5fa" />
+          <stop offset="50%" stopColor="#a78bfa" />
+          <stop offset="100%" stopColor="#f472b6" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
+        stroke="url(#executeGradient)"
+        className="animate-pulse"
+      />
+    </svg>
+  );
+}
 
 // Lazy load Monaco Editor to reduce initial bundle size
 const Editor = lazy(() =>
@@ -223,7 +254,7 @@ export function QueryPanel({
         <p className="text-xs text-muted-foreground">
           {mode === 'sql'
             ? 'Write SQL queries to explore your data. Press Cmd/Ctrl+Enter to execute.'
-            : 'Describe what you want to see in plain English. Our AI will generate the SQL query.'}
+            : 'Describe what you want to see in plain English. Template-based NL→SQL (beta) will generate a query.'}
         </p>
       </div>
 
@@ -245,6 +276,52 @@ export function QueryPanel({
                 value={sqlQuery}
                 onChange={(value) => handleQueryChange(value || '')}
                 onMount={(editorInstance, monaco: Monaco) => {
+                  // Define custom dark theme matching our site
+                  monaco.editor.defineTheme('custom-dark', {
+                    base: 'vs-dark',
+                    inherit: true,
+                    rules: [
+                      { token: 'keyword', foreground: '60a5fa', fontStyle: 'bold' }, // blue
+                      { token: 'string', foreground: '34d399' }, // green
+                      { token: 'number', foreground: 'f472b6' }, // pink
+                      { token: 'comment', foreground: '6b7280', fontStyle: 'italic' }, // gray
+                      { token: 'operator', foreground: 'a78bfa' }, // purple
+                      { token: 'identifier', foreground: 'fafafa' }, // white
+                      { token: 'type', foreground: 'fbbf24' }, // yellow
+                    ],
+                    colors: {
+                      'editor.background': '#000000', // Match site background
+                      'editor.foreground': '#fafafa',
+                      'editor.lineHighlightBackground': '#0a0a0a',
+                      'editor.selectionBackground': '#2563eb44',
+                      'editorLineNumber.foreground': '#404040',
+                      'editorLineNumber.activeForeground': '#808080',
+                      'editorGutter.background': '#000000',
+                      'editor.inactiveSelectionBackground': '#1e3a5f33',
+                    }
+                  });
+
+                  // Define custom light theme
+                  monaco.editor.defineTheme('custom-light', {
+                    base: 'vs',
+                    inherit: true,
+                    rules: [
+                      { token: 'keyword', foreground: '2563eb', fontStyle: 'bold' },
+                      { token: 'string', foreground: '059669' },
+                      { token: 'number', foreground: 'db2777' },
+                      { token: 'comment', foreground: '9ca3af', fontStyle: 'italic' },
+                      { token: 'operator', foreground: '7c3aed' },
+                    ],
+                    colors: {
+                      'editor.background': '#ffffff',
+                      'editorLineNumber.foreground': '#d4d4d4',
+                      'editorLineNumber.activeForeground': '#a3a3a3',
+                    }
+                  });
+
+                  // Apply the custom theme
+                  monaco.editor.setTheme(resolvedTheme === 'dark' ? 'custom-dark' : 'custom-light');
+
                   // Focus editor on mount
                   editorInstance.focus();
                   // Set up keyboard shortcuts
@@ -253,12 +330,12 @@ export function QueryPanel({
                     (window.navigator.platform.toLowerCase().includes('mac') ? 2048 : 2176) | 3,
                     handleExecute
                   );
-                  
+
                   // Clean up previous completion provider if it exists
                   if (completionProviderRef.current) {
                     completionProviderRef.current.dispose();
                   }
-                  
+
                   // Register custom SQL completion provider for keywords, tables, and columns
                   completionProviderRef.current = monaco.languages.registerCompletionItemProvider('sql', {
                     triggerCharacters: [' ', '.', ','],
@@ -317,11 +394,15 @@ export function QueryPanel({
                     }
                   });
                 }}
-                // Dynamic theme based on app theme (Issue #2)
-                theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
+                // Use custom themes defined in onMount
+                theme={resolvedTheme === 'dark' ? 'custom-dark' : 'custom-light'}
                 options={{
                   minimap: { enabled: false },
                   lineNumbers: 'on',
+                  lineNumbersMinChars: 2, // Narrower line numbers column
+                  glyphMargin: false, // Remove extra glyph margin
+                  folding: false, // Remove folding margin
+                  lineDecorationsWidth: 0, // No decoration width
                   roundedSelection: false,
                   scrollBeyondLastLine: false,
                   readOnly: isExecuting,
@@ -329,18 +410,15 @@ export function QueryPanel({
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                   wordWrap: 'on',
                   automaticLayout: true,
-                  padding: { top: 12, bottom: 12 },
-                  // Fix: Ensure autocomplete widgets render correctly in transformed containers
+                  padding: { top: 8, bottom: 8 },
                   fixedOverflowWidgets: true,
                   suggest: {
                     showKeywords: true,
                     showSnippets: true,
-                    // Improve autocomplete behavior
                     insertMode: 'replace',
                     filterGraceful: true,
                     localityBonus: true
                   },
-                  // Better cursor and selection visibility
                   cursorBlinking: 'smooth',
                   cursorSmoothCaretAnimation: 'on'
                 }}
@@ -364,26 +442,14 @@ export function QueryPanel({
       {/* Execute Button */}
       <div className="p-4 border-t">
         <Button
+          variant="secondary"
           onClick={handleExecute}
           disabled={isExecuting || !currentQuery.trim()}
-          className="w-full"
-          size="lg"
+          className="w-full h-9 text-sm gap-2"
         >
-          {isExecuting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Executing...
-            </>
-          ) : (
-            <>
-              <Play className="h-4 w-4" />
-              Execute Query
-            </>
-          )}
+          <AnimatedExecuteIcon isExecuting={isExecuting} />
+          {isExecuting ? 'Executing...' : 'Execute'}
         </Button>
-        <p className="text-xs text-muted-foreground text-center mt-2">
-          Cmd/Ctrl + Enter
-        </p>
       </div>
     </div>
   );
