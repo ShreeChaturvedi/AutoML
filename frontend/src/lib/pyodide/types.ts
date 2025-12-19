@@ -32,6 +32,14 @@ export interface PackageInfo {
     homepage?: string;
 }
 
+export interface PackageInstallEvent {
+    type: 'progress' | 'log' | 'done';
+    progress?: number;
+    stage?: string;
+    message?: string;
+    success?: boolean;
+}
+
 export interface RuntimeInfo {
     mode: ExecutionMode;
     pythonVersion: PythonVersion;

@@ -4,8 +4,9 @@
  * API client for cloud (Docker) code execution.
  */
 
-import { apiRequest } from './client';
-import type { ExecutionResult, PythonVersion, PackageInfo } from '../pyodide/types';
+import { apiRequest, getApiBaseUrl } from './client';
+import { useAuthStore } from '@/stores/authStore';
+import type { ExecutionResult, PythonVersion, PackageInfo, PackageInstallEvent } from '../pyodide/types';
 
 export interface ExecuteRequest {
     projectId: string;
@@ -93,6 +94,90 @@ export async function installPackage(
         method: 'POST',
         body: JSON.stringify({ sessionId, packageName })
     });
+}
+
+/**
+ * Install package with progress streaming (NDJSON)
+ */
+export async function installPackageStream(
+    sessionId: string,
+    packageName: string,
+    onEvent: (event: PackageInstallEvent) => void
+): Promise<{ success: boolean; message: string }> {
+    const authState = useAuthStore.getState();
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/x-ndjson'
+    };
+
+    if (authState.accessToken) {
+        headers.Authorization = `Bearer ${authState.accessToken}`;
+    }
+
+    const response = await fetch(`${getApiBaseUrl()}/execute/packages/stream`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ sessionId, packageName })
+    });
+
+    if (!response.ok || !response.body) {
+        const fallback = await response.text().catch(() => '');
+        throw new Error(fallback || `Failed to install package (${response.status})`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalResult: { success: boolean; message: string } | null = null;
+
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+                const event = JSON.parse(trimmed) as PackageInstallEvent;
+                if (event.type === 'done') {
+                    finalResult = {
+                        success: Boolean(event.success),
+                        message: event.message ?? ''
+                    };
+                }
+                onEvent(event);
+            } catch {
+                // Ignore malformed lines
+            }
+        }
+    }
+
+    if (buffer.trim()) {
+        try {
+            const event = JSON.parse(buffer.trim()) as PackageInstallEvent;
+            if (event.type === 'done') {
+                finalResult = {
+                    success: Boolean(event.success),
+                    message: event.message ?? ''
+                };
+            }
+            onEvent(event);
+        } catch {
+            // Ignore malformed tail
+        }
+    }
+
+    if (finalResult) {
+        return finalResult;
+    }
+
+    return {
+        success: false,
+        message: 'Package installation did not return a result.'
+    };
 }
 
 /**

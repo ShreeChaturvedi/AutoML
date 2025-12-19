@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -57,7 +58,10 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
   const [installMessage, setInstallMessage] = useState<string | null>(null);
   const [installState, setInstallState] = useState<'idle' | 'success' | 'error'>('idle');
   const [installing, setInstalling] = useState(false);
+  const [installProgress, setInstallProgress] = useState<number | null>(null);
+  const [installStage, setInstallStage] = useState<string | null>(null);
   const [packageSuggestions, setPackageSuggestions] = useState<PackageInfo[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<PackageInfo | null>(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
@@ -150,8 +154,23 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
     }
   }, [activeSuggestionIndex, packageSuggestions.length]);
 
+  useEffect(() => {
+    if (activeSuggestionIndex >= 0) {
+      setSelectedPackage(packageSuggestions[activeSuggestionIndex] ?? null);
+      return;
+    }
+    const trimmed = packageInput.trim().toLowerCase();
+    if (!trimmed) {
+      setSelectedPackage(null);
+      return;
+    }
+    const match = packageSuggestions.find((pkg) => pkg.name.toLowerCase() === trimmed);
+    setSelectedPackage(match ?? null);
+  }, [activeSuggestionIndex, packageInput, packageSuggestions]);
+
   const handleSuggestionSelect = useCallback((suggestion: PackageInfo) => {
     setPackageInput(suggestion.name);
+    setSelectedPackage(suggestion);
     setSuggestionsOpen(false);
     setActiveSuggestionIndex(-1);
   }, []);
@@ -227,13 +246,35 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
     setInstalling(true);
     setInstallMessage(null);
     setInstallState('idle');
+    setInstallProgress(8);
+    setInstallStage('Preparing');
 
-    const result = await installPackage(trimmed, projectId);
+    const result = await installPackage(trimmed, projectId, {
+      onEvent: (event) => {
+        if (event.type === 'progress') {
+          if (typeof event.progress === 'number') {
+            setInstallProgress(event.progress);
+          }
+          if (event.stage) {
+            setInstallStage(event.stage);
+          }
+        }
+        if (event.type === 'done') {
+          if (event.message) {
+            setInstallMessage(event.message);
+          }
+          setInstallStage(event.success ? 'Completed' : 'Failed');
+          setInstallProgress((prev) => (event.success ? 100 : prev ?? 0));
+        }
+      }
+    });
     setInstalling(false);
     setInstallMessage(result.message);
     setInstallState(result.success ? 'success' : 'error');
     setSuggestionsOpen(false);
     setActiveSuggestionIndex(-1);
+    setInstallStage(result.success ? 'Completed' : 'Failed');
+    setInstallProgress((prev) => (result.success ? 100 : prev ?? 0));
 
     if (result.success) {
       setPackageInput('');
@@ -363,123 +404,178 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
           </TabsContent>
 
           <TabsContent value="packages" className="flex h-[300px] flex-col gap-4">
-            <div className="flex flex-wrap items-start gap-2">
-              <div className="relative flex-1 min-w-[240px]">
-                <Input
-                  value={packageInput}
-                  onChange={(e) => {
-                    setPackageInput(e.target.value);
-                    setSuggestionsOpen(true);
-                  }}
-                  onFocus={handlePackageFocus}
-                  onBlur={handlePackageBlur}
-                  onKeyDown={handlePackageKeyDown}
-                  placeholder="pandas, xgboost, optuna..."
-                  className="w-full"
-                  role="combobox"
-                  aria-autocomplete="list"
-                  aria-expanded={suggestionsOpen}
-                  aria-controls={suggestionsOpen ? suggestionsListId : undefined}
-                  aria-activedescendant={
-                    activeSuggestionIndex >= 0
-                      ? `${suggestionsListId}-option-${activeSuggestionIndex}`
-                      : undefined
-                  }
-                  autoComplete="off"
-                />
-                {suggestionsOpen && (
-                  <div
-                    id={suggestionsListId}
-                    role="listbox"
-                    className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border bg-background p-1 shadow-lg"
-                  >
-                    {suggestionsLoading && (
-                      <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Searching packages...
-                      </div>
-                    )}
-                    {!suggestionsLoading && packageSuggestions.length === 0 && (
-                      <div className="px-2 py-1 text-xs text-muted-foreground">
-                        No package matches found.
-                      </div>
-                    )}
-                    {!suggestionsLoading && packageInput.trim().length === 0 && packageSuggestions.length > 0 && (
-                      <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Suggested packages
-                      </div>
-                    )}
-                    {packageSuggestions.map((pkg, index) => (
-                      <button
-                        key={`${pkg.name}-${pkg.version ?? 'latest'}`}
-                        type="button"
-                        id={`${suggestionsListId}-option-${index}`}
-                        role="option"
-                        aria-selected={index === activeSuggestionIndex}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => handleSuggestionSelect(pkg)}
-                        className={cn(
-                          'w-full rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
-                          index === activeSuggestionIndex
-                            ? 'bg-foreground/10 text-foreground'
-                            : 'hover:bg-muted'
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{pkg.name}</span>
-                          <div className="flex items-center gap-2">
-                            {mode === 'browser' && isCloudOnlyPackage(pkg.name) && (
-                              <Badge variant="outline" className="text-[10px]">
-                                Cloud only
-                              </Badge>
-                            )}
-                            {pkg.version && (
-                              <span className="text-[11px] text-muted-foreground">{pkg.version}</span>
-                            )}
-                          </div>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-start gap-2">
+                <div className="relative flex-1 min-w-[240px]">
+                  <Input
+                    value={packageInput}
+                    onChange={(e) => {
+                      setPackageInput(e.target.value);
+                      setSuggestionsOpen(true);
+                    }}
+                    onFocus={handlePackageFocus}
+                    onBlur={handlePackageBlur}
+                    onKeyDown={handlePackageKeyDown}
+                    placeholder="pandas, xgboost, optuna..."
+                    className="w-full"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={suggestionsOpen}
+                    aria-controls={suggestionsOpen ? suggestionsListId : undefined}
+                    aria-activedescendant={
+                      activeSuggestionIndex >= 0
+                        ? `${suggestionsListId}-option-${activeSuggestionIndex}`
+                        : undefined
+                    }
+                    autoComplete="off"
+                  />
+                  {suggestionsOpen && (
+                    <div
+                      id={suggestionsListId}
+                      role="listbox"
+                      className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border bg-background p-1 shadow-lg"
+                    >
+                      {suggestionsLoading && (
+                        <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Searching packages...
                         </div>
-                        {pkg.summary && (
-                          <div className="text-xs text-muted-foreground">{pkg.summary}</div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                      )}
+                      {!suggestionsLoading && packageSuggestions.length === 0 && (
+                        <div className="px-2 py-1 text-xs text-muted-foreground">
+                          No package matches found.
+                        </div>
+                      )}
+                      {!suggestionsLoading && packageInput.trim().length === 0 && packageSuggestions.length > 0 && (
+                        <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Suggested packages
+                        </div>
+                      )}
+                      {packageSuggestions.map((pkg, index) => (
+                        <button
+                          key={`${pkg.name}-${pkg.version ?? 'latest'}`}
+                          type="button"
+                          id={`${suggestionsListId}-option-${index}`}
+                          role="option"
+                          aria-selected={index === activeSuggestionIndex}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onMouseEnter={() => setSelectedPackage(pkg)}
+                          onClick={() => handleSuggestionSelect(pkg)}
+                          className={cn(
+                            'w-full rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
+                            index === activeSuggestionIndex
+                              ? 'bg-foreground/10 text-foreground'
+                              : 'hover:bg-muted'
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">{pkg.name}</span>
+                            <div className="flex items-center gap-2">
+                              {mode === 'browser' && isCloudOnlyPackage(pkg.name) && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  Cloud only
+                                </Badge>
+                              )}
+                              {pkg.version && (
+                                <span className="text-[11px] text-muted-foreground">{pkg.version}</span>
+                              )}
+                            </div>
+                          </div>
+                          {pkg.summary && (
+                            <div className="text-xs text-muted-foreground">{pkg.summary}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  onClick={handleInstall}
+                  disabled={!packageInput.trim() || installing}
+                  variant="ghost"
+                  size="icon"
+                  title="Install packages"
+                  className="group h-10 w-10 rounded-full border border-foreground/20 bg-transparent text-foreground transition-colors duration-200 hover:bg-foreground/10"
+                >
+                  {installing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <PackagePlus className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:rotate-6" />
+                  )}
+                  <span className="sr-only">Install packages</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefreshPackages}
+                  title="Refresh installed packages"
+                  className="group h-10 w-10 rounded-full border border-foreground/20 bg-transparent text-foreground transition-colors duration-200 hover:bg-foreground/10"
+                >
+                  {refreshingPackages ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCcw className="h-4 w-4 transition-transform duration-200 group-hover:animate-spin" />
+                  )}
+                </Button>
               </div>
-              <Button
-                onClick={handleInstall}
-                disabled={!packageInput.trim() || installing}
-                variant="ghost"
-                size="icon"
-                title="Install packages"
-                className="group h-10 w-10 rounded-full border border-foreground/20 bg-transparent text-foreground transition-colors duration-200 hover:bg-foreground/10"
-              >
-                {installing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <PackagePlus className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:rotate-6" />
-                )}
-                <span className="sr-only">Install packages</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleRefreshPackages}
-                title="Refresh installed packages"
-                className="group h-10 w-10 rounded-full border border-foreground/20 bg-transparent text-foreground transition-colors duration-200 hover:bg-foreground/10"
-              >
-                {refreshingPackages ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCcw className="h-4 w-4 transition-transform duration-200 group-hover:animate-spin" />
-                )}
-              </Button>
+
+              {selectedPackage ? (
+                <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-foreground">{selectedPackage.name}</span>
+                    <div className="flex items-center gap-2">
+                      {mode === 'browser' && isCloudOnlyPackage(selectedPackage.name) && (
+                        <Badge variant="outline" className="text-[10px]">
+                          Cloud only
+                        </Badge>
+                      )}
+                      {selectedPackage.version && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {selectedPackage.version}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  {selectedPackage.summary && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {selectedPackage.summary}
+                    </p>
+                  )}
+                  {selectedPackage.homepage && (
+                    <a
+                      href={selectedPackage.homepage}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                      {selectedPackage.homepage}
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                  Select a package to preview details before installing.
+                </div>
+              )}
+
+              {(installProgress !== null || installing) && (
+                <div className="rounded-md border bg-muted/30 px-3 py-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {installStage ?? 'Installing'}
+                    </span>
+                    {installProgress !== null && <span>{Math.round(installProgress)}%</span>}
+                  </div>
+                  <Progress value={installProgress ?? 0} className="mt-2 h-1" />
+                </div>
+              )}
+
+              {mode === 'browser' && (
+                <p className="text-xs text-muted-foreground">
+                  Browser runtime supports pure Python wheels only. Use cloud runtime for native packages (e.g. torch).
+                </p>
+              )}
             </div>
-            {mode === 'browser' && (
-              <p className="text-xs text-muted-foreground">
-                Browser runtime supports pure Python wheels only. Use cloud runtime for native packages (e.g. torch).
-              </p>
-            )}
 
             <ScrollArea className="min-h-0 flex-1 rounded-md border p-3">
               <div className="space-y-2">

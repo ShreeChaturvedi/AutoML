@@ -6,7 +6,13 @@
  */
 
 import { create } from 'zustand';
-import type { ExecutionMode, PythonVersion, ExecutionResult, PackageInfo } from '@/lib/pyodide/types';
+import type {
+    ExecutionMode,
+    PythonVersion,
+    ExecutionResult,
+    PackageInfo,
+    PackageInstallEvent
+} from '@/lib/pyodide/types';
 import {
     loadPyodide,
     isPyodideReady,
@@ -47,7 +53,11 @@ interface ExecutionState {
     initializePyodide: () => Promise<void>;
     initializeCloud: (projectId: string) => Promise<void>;
     executeCode: (code: string, projectId: string) => Promise<ExecutionResult>;
-    installPackage: (packageName: string, projectId?: string) => Promise<{ success: boolean; message: string }>;
+    installPackage: (
+        packageName: string,
+        projectId?: string,
+        options?: { onEvent?: (event: PackageInstallEvent) => void }
+    ) => Promise<{ success: boolean; message: string }>;
     refreshPackages: () => Promise<void>;
     mountDatasetFile: (filename: string, content: ArrayBuffer | string) => Promise<void>;
     checkCloudHealth: () => Promise<void>;
@@ -206,8 +216,9 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         }
     },
 
-    installPackage: async (packageName, projectId) => {
+    installPackage: async (packageName, projectId, options) => {
         const { mode, sessionId } = get();
+        const onEvent = options?.onEvent;
 
         set({ installingPackage: true });
 
@@ -215,9 +226,15 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             let result: { success: boolean; message: string };
 
             if (mode === 'browser') {
+                onEvent?.({ type: 'progress', progress: 12, stage: 'Preparing' });
+                onEvent?.({ type: 'progress', progress: 50, stage: 'Installing' });
                 result = await pyodideInstallPackage(packageName);
                 if (result.success) {
                     set({ installedPackages: await getPyodidePackages() });
+                    onEvent?.({ type: 'progress', progress: 100, stage: 'Completed' });
+                    onEvent?.({ type: 'done', success: true, message: result.message });
+                } else {
+                    onEvent?.({ type: 'done', success: false, message: result.message });
                 }
             } else {
                 if (!sessionId && projectId) {
@@ -228,10 +245,13 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
                 if (!activeSessionId) {
                     result = { success: false, message: 'No active cloud session' };
                 } else {
-                    result = await executionApi.installPackage(activeSessionId, packageName);
+                    result = await executionApi.installPackageStream(activeSessionId, packageName, (event) => {
+                        onEvent?.(event);
+                    });
                     if (result.success) {
                         const packages = await executionApi.listPackages(activeSessionId);
                         set({ installedPackages: packages });
+                        onEvent?.({ type: 'progress', progress: 100, stage: 'Completed' });
                     }
                 }
             }
@@ -240,6 +260,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             return result;
         } catch (error) {
             set({ installingPackage: false });
+            onEvent?.({
+                type: 'done',
+                success: false,
+                message: error instanceof Error ? error.message : 'Failed to install package'
+            });
             return {
                 success: false,
                 message: error instanceof Error ? error.message : 'Failed to install package'
