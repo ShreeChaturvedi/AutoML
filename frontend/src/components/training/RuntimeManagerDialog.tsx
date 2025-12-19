@@ -250,6 +250,12 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
     if (pyodideInitializing) return `Loading ${pyodideProgress}%`;
     return 'Idle';
   }, [mode, cloudInitializing, cloudAvailable, sessionId, pyodideReady, pyodideInitializing, pyodideProgress]);
+  const runtimeTone = useMemo(() => {
+    if (runtimeStatus === 'Connected' || runtimeStatus === 'Ready') return 'ready';
+    if (runtimeStatus === 'Connecting' || runtimeStatus.startsWith('Loading')) return 'pending';
+    if (runtimeStatus === 'Unavailable') return 'error';
+    return 'idle';
+  }, [runtimeStatus]);
 
   const isCloudOnlyPackage = useCallback((name: string) => {
     const normalized = name.trim().toLowerCase().replace(/_/g, '-');
@@ -278,84 +284,100 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
             <TabsTrigger value="datasets">Datasets</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="runtime" className="flex h-[320px] flex-col gap-4">
-            <div className="flex flex-1 flex-col gap-4">
+          <TabsContent value="runtime" className="flex h-[300px] flex-col gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <Badge variant="secondary" className="gap-1">
+                {mode === 'cloud' ? <Cloud className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
+                {mode === 'cloud' ? 'Cloud Runtime' : 'Browser Runtime'}
+              </Badge>
+              <div
+                className={cn(
+                  'flex items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                  runtimeTone === 'ready' && 'border-emerald-500/40 text-emerald-500',
+                  runtimeTone === 'pending' && 'border-amber-500/40 text-amber-500',
+                  runtimeTone === 'error' && 'border-destructive/40 text-destructive',
+                  runtimeTone === 'idle' && 'border-border/60 text-muted-foreground'
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-2 w-2 rounded-full',
+                    runtimeTone === 'ready' && 'bg-emerald-500',
+                    runtimeTone === 'pending' && 'bg-amber-500 animate-pulse',
+                    runtimeTone === 'error' && 'bg-destructive',
+                    runtimeTone === 'idle' && 'bg-muted-foreground/60'
+                  )}
+                />
+                <span>{runtimeStatus}</span>
+              </div>
+            </div>
+
+            <div className="rounded-md border bg-muted/20 p-3">
               <div className="flex flex-wrap items-center gap-3">
-                <Badge variant="secondary" className="gap-1">
-                  {mode === 'cloud' ? <Cloud className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
-                  {mode === 'cloud' ? 'Cloud Runtime' : 'Browser Runtime'}
-                </Badge>
-                <Badge
-                  variant={runtimeStatus === 'Connected' || runtimeStatus === 'Ready' ? 'default' : 'outline'}
-                  className="text-xs"
-                >
-                  {runtimeStatus}
-                </Badge>
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Python
+                </span>
+                <Select value={pythonVersion} onValueChange={setPythonVersion}>
+                  <SelectTrigger className="h-8 w-[150px] text-xs">
+                    <SelectValue placeholder="Select version" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3.11">Python 3.11</SelectItem>
+                    <SelectItem value="3.10">Python 3.10</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Python version</p>
-                  <Select value={pythonVersion} onValueChange={setPythonVersion}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select version" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="3.11">Python 3.11</SelectItem>
-                      <SelectItem value="3.10">Python 3.10</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <Separator className="my-3" />
 
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Session</p>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[11px]">
-                      {mode === 'cloud'
-                        ? sessionId
-                          ? `Cloud session ${sessionId.slice(0, 8)}…`
-                          : 'No cloud session yet'
-                        : 'Browser session (per tab)'}
-                    </Badge>
-                    {mode === 'cloud' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8"
-                        onClick={() => initializeCloud(projectId)}
-                        disabled={!cloudAvailable || cloudInitializing}
-                      >
-                        {cloudInitializing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        {sessionId ? 'Reconnect' : 'Connect'}
-                      </Button>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-start gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Session
+                </span>
+                <div className="flex flex-1 flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="text-[11px]">
                     {mode === 'cloud'
                       ? sessionId
-                        ? 'Cloud sessions keep installed packages and cache data for faster runs.'
-                        : 'Start a cloud session to cache packages and reuse datasets.'
-                      : 'Browser runtime keeps packages in-memory for this tab only.'}
-                  </p>
+                        ? `Cloud session ${sessionId.slice(0, 8)}…`
+                        : 'No cloud session yet'
+                      : 'Browser session (per tab)'}
+                  </Badge>
+                  {mode === 'cloud' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => initializeCloud(projectId)}
+                      disabled={!cloudAvailable || cloudInitializing}
+                    >
+                      {cloudInitializing && <Loader2 className="h-3 w-3 animate-spin" />}
+                      {sessionId ? 'Reconnect' : 'Connect'}
+                    </Button>
+                  )}
                 </div>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {mode === 'cloud'
+                  ? sessionId
+                    ? 'Cloud sessions keep installed packages and cache data for faster runs.'
+                    : 'Start a cloud session to cache packages and reuse datasets.'
+                  : 'Browser runtime keeps packages in-memory for this tab only.'}
+              </p>
+            </div>
 
-              <Separator />
-
-              <div className="mt-auto space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4" />
-                  <span>Datasets mount at `/workspace/datasets` and resolve via `resolve_dataset_path()`.</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4" />
-                  <span>Install packages per session using pip (cloud) or micropip (browser).</span>
-                </div>
+            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4" />
+                <span>Datasets mount at `/workspace/datasets` and resolve via `resolve_dataset_path()`.</span>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                <span>Install packages per session using pip (cloud) or micropip (browser).</span>
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="packages" className="flex h-[320px] flex-col gap-4">
+          <TabsContent value="packages" className="flex h-[300px] flex-col gap-4">
             <div className="flex flex-wrap items-start gap-2">
               <div className="relative flex-1 min-w-[240px]">
                 <Input
@@ -510,7 +532,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="datasets" className="flex h-[320px] flex-col gap-4">
+          <TabsContent value="datasets" className="flex h-[300px] flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="text-xs">
                 {datasetFiles.length} dataset{datasetFiles.length === 1 ? '' : 's'}
