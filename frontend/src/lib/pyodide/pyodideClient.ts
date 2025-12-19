@@ -36,6 +36,21 @@ const PYODIDE_CDN = 'https://cdn.jsdelivr.net/pyodide/v0.26.1/full/';
 let pyodideInstance: PyodideInterface | null = null;
 let initPromise: Promise<PyodideInterface> | null = null;
 const loadedPackages: Set<string> = new Set();
+const BROWSER_UNSUPPORTED_PACKAGES = new Set([
+    'torch',
+    'pytorch',
+    'torchvision',
+    'torchaudio',
+    'tensorflow',
+    'jax',
+    'jaxlib',
+    'xgboost',
+    'lightgbm',
+    'catboost',
+    'opencv-python',
+    'pyspark',
+    'prophet'
+]);
 
 // Progress callback type
 export type ProgressCallback = (progress: number, message: string) => void;
@@ -258,6 +273,14 @@ export async function installPackage(packageName: string): Promise<{ success: bo
         return { success: false, message: 'Pyodide not initialized' };
     }
 
+    const normalized = normalizePackageName(packageName);
+    if (normalized && BROWSER_UNSUPPORTED_PACKAGES.has(normalized)) {
+        return {
+            success: false,
+            message: `${packageName} requires native wheels and is not supported in browser mode. Switch to the cloud runtime to install it.`
+        };
+    }
+
     if (loadedPackages.has(packageName)) {
         return { success: true, message: `${packageName} already installed` };
     }
@@ -286,9 +309,20 @@ await micropip.install('${packageName}')
         loadedPackages.add(packageName);
         return { success: true, message: `Installed ${packageName}` };
     } catch (error) {
+        const rawMessage = error instanceof Error ? error.message : 'Failed to install package';
+        if (
+            rawMessage.includes('pure Python 3 wheel') ||
+            rawMessage.includes('No matching distribution found') ||
+            rawMessage.includes('platform tag')
+        ) {
+            return {
+                success: false,
+                message: `${packageName} is not available as a pure Python wheel for the browser runtime. Switch to the cloud runtime to install it.`
+            };
+        }
         return {
             success: false,
-            message: error instanceof Error ? error.message : 'Failed to install package'
+            message: rawMessage
         };
     }
 }
@@ -384,6 +418,15 @@ function loadScript(src: string): Promise<void> {
         script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
         document.head.appendChild(script);
     });
+}
+
+function normalizePackageName(input: string): string {
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+    const firstToken = trimmed.split(/[,\s]/)[0] ?? trimmed;
+    const withoutExtras = firstToken.split('[')[0] ?? firstToken;
+    const withoutSpecifier = withoutExtras.split(/[<>=!~]/)[0] ?? withoutExtras;
+    return withoutSpecifier.trim().toLowerCase().replace(/_/g, '-');
 }
 
 function disableAmdLoader(): () => void {

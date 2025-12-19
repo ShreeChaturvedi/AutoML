@@ -30,6 +30,22 @@ import {
   Settings2
 } from 'lucide-react';
 
+const CLOUD_ONLY_PACKAGES = new Set([
+  'torch',
+  'pytorch',
+  'torchvision',
+  'torchaudio',
+  'tensorflow',
+  'jax',
+  'jaxlib',
+  'xgboost',
+  'lightgbm',
+  'catboost',
+  'opencv-python',
+  'pyspark',
+  'prophet'
+]);
+
 interface RuntimeManagerDialogProps {
   projectId: string;
 }
@@ -235,6 +251,11 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
     return 'Idle';
   }, [mode, cloudInitializing, cloudAvailable, sessionId, pyodideReady, pyodideInitializing, pyodideProgress]);
 
+  const isCloudOnlyPackage = useCallback((name: string) => {
+    const normalized = name.trim().toLowerCase().replace(/_/g, '-');
+    return CLOUD_ONLY_PACKAGES.has(normalized);
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -397,9 +418,16 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium">{pkg.name}</span>
-                          {pkg.version && (
-                            <span className="text-[11px] text-muted-foreground">{pkg.version}</span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {mode === 'browser' && isCloudOnlyPackage(pkg.name) && (
+                              <Badge variant="outline" className="text-[10px]">
+                                Cloud only
+                              </Badge>
+                            )}
+                            {pkg.version && (
+                              <span className="text-[11px] text-muted-foreground">{pkg.version}</span>
+                            )}
+                          </div>
                         </div>
                         {pkg.summary && (
                           <div className="text-xs text-muted-foreground">{pkg.summary}</div>
@@ -434,6 +462,11 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                 )}
               </Button>
             </div>
+            {mode === 'browser' && (
+              <p className="text-xs text-muted-foreground">
+                Browser runtime supports pure Python wheels only. Use cloud runtime for native packages (e.g. torch).
+              </p>
+            )}
 
             {installMessage && (
               <div
