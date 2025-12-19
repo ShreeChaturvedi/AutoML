@@ -271,89 +271,91 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="runtime" className="w-full min-h-[440px]">
+        <Tabs defaultValue="runtime" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="runtime">Runtime</TabsTrigger>
             <TabsTrigger value="packages">Packages</TabsTrigger>
             <TabsTrigger value="datasets">Datasets</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="runtime" className="space-y-4 min-h-[340px]">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge variant="secondary" className="gap-1">
-                {mode === 'cloud' ? <Cloud className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
-                {mode === 'cloud' ? 'Cloud Runtime' : 'Browser Runtime'}
-              </Badge>
-              <Badge
-                variant={runtimeStatus === 'Connected' || runtimeStatus === 'Ready' ? 'default' : 'outline'}
-                className="text-xs"
-              >
-                {runtimeStatus}
-              </Badge>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Python version</p>
-                <Select value={pythonVersion} onValueChange={setPythonVersion}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select version" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3.11">Python 3.11</SelectItem>
-                    <SelectItem value="3.10">Python 3.10</SelectItem>
-                  </SelectContent>
-                </Select>
+          <TabsContent value="runtime" className="flex h-[320px] flex-col gap-4">
+            <div className="flex flex-1 flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant="secondary" className="gap-1">
+                  {mode === 'cloud' ? <Cloud className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
+                  {mode === 'cloud' ? 'Cloud Runtime' : 'Browser Runtime'}
+                </Badge>
+                <Badge
+                  variant={runtimeStatus === 'Connected' || runtimeStatus === 'Ready' ? 'default' : 'outline'}
+                  className="text-xs"
+                >
+                  {runtimeStatus}
+                </Badge>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Session</p>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[11px]">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Python version</p>
+                  <Select value={pythonVersion} onValueChange={setPythonVersion}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select version" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3.11">Python 3.11</SelectItem>
+                      <SelectItem value="3.10">Python 3.10</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Session</p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[11px]">
+                      {mode === 'cloud'
+                        ? sessionId
+                          ? `Cloud session ${sessionId.slice(0, 8)}…`
+                          : 'No cloud session yet'
+                        : 'Browser session (per tab)'}
+                    </Badge>
+                    {mode === 'cloud' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        onClick={() => initializeCloud(projectId)}
+                        disabled={!cloudAvailable || cloudInitializing}
+                      >
+                        {cloudInitializing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        {sessionId ? 'Reconnect' : 'Connect'}
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
                     {mode === 'cloud'
                       ? sessionId
-                        ? `Cloud session ${sessionId.slice(0, 8)}…`
-                        : 'No cloud session yet'
-                      : 'Browser session (per tab)'}
-                  </Badge>
-                  {mode === 'cloud' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => initializeCloud(projectId)}
-                      disabled={!cloudAvailable || cloudInitializing}
-                    >
-                      {cloudInitializing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      {sessionId ? 'Reconnect' : 'Connect'}
-                    </Button>
-                  )}
+                        ? 'Cloud sessions keep installed packages and cache data for faster runs.'
+                        : 'Start a cloud session to cache packages and reuse datasets.'
+                      : 'Browser runtime keeps packages in-memory for this tab only.'}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {mode === 'cloud'
-                    ? sessionId
-                      ? 'Cloud sessions keep installed packages and cache data for faster runs.'
-                      : 'Start a cloud session to cache packages and reuse datasets.'
-                    : 'Browser runtime keeps packages in-memory for this tab only.'}
-                </p>
               </div>
-            </div>
 
-            <Separator />
+              <Separator />
 
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <Database className="h-4 w-4" />
-                <span>Datasets mount at `/workspace/datasets` and resolve via `resolve_dataset_path()`.</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                <span>Install packages per session using pip (cloud) or micropip (browser).</span>
+              <div className="mt-auto space-y-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  <span>Datasets mount at `/workspace/datasets` and resolve via `resolve_dataset_path()`.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  <span>Install packages per session using pip (cloud) or micropip (browser).</span>
+                </div>
               </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="packages" className="space-y-4 min-h-[340px]">
+          <TabsContent value="packages" className="flex h-[320px] flex-col gap-4">
             <div className="flex flex-wrap items-start gap-2">
               <div className="relative flex-1 min-w-[240px]">
                 <Input
@@ -468,25 +470,24 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
               </p>
             )}
 
-            {installMessage && (
-              <div
-                className={cn(
-                  'rounded-md border px-3 py-2 text-xs',
-                  installState === 'success'
-                    ? 'border-emerald-500/40 text-emerald-600'
-                    : 'border-destructive/40 text-destructive'
+            <ScrollArea className="min-h-0 flex-1 rounded-md border p-3">
+              <div className="space-y-2">
+                {installMessage && (
+                  <div
+                    className={cn(
+                      'rounded-md border px-3 py-2 text-xs',
+                      installState === 'success'
+                        ? 'border-emerald-500/40 text-emerald-600'
+                        : 'border-destructive/40 text-destructive'
+                    )}
+                  >
+                    {installMessage}
+                  </div>
                 )}
-              >
-                {installMessage}
-              </div>
-            )}
-
-            <ScrollArea className="h-56 rounded-md border p-3">
-              {installedPackages.length === 0 ? (
-                <span className="text-xs text-muted-foreground">No packages reported yet.</span>
-              ) : (
-                <div className="space-y-2">
-                  {installedPackages.map((pkg) => (
+                {installedPackages.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">No packages reported yet.</span>
+                ) : (
+                  installedPackages.map((pkg) => (
                     <div
                       key={`${pkg.name}-${pkg.version ?? 'latest'}`}
                       className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
@@ -503,13 +504,13 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                         <p className="mt-1 text-xs text-muted-foreground">{pkg.summary}</p>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="datasets" className="space-y-4 min-h-[340px]">
+          <TabsContent value="datasets" className="flex h-[320px] flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="text-xs">
                 {datasetFiles.length} dataset{datasetFiles.length === 1 ? '' : 's'}
@@ -526,7 +527,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
               </p>
             </div>
 
-            <ScrollArea className="h-40 rounded-md border p-3">
+            <ScrollArea className="min-h-0 flex-1 rounded-md border p-3">
               <div className="space-y-2 text-sm">
                 {datasetFiles.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Upload a dataset to see it here.</p>
