@@ -21,8 +21,9 @@ import { searchPackages } from '@/lib/api/execution';
 import type { PackageInfo } from '@/lib/pyodide/types';
 import {
   Cloud,
-  Cpu,
   Database,
+  Globe,
+  Info,
   Loader2,
   Package,
   PackagePlus,
@@ -286,19 +287,11 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
 
           <TabsContent value="runtime" className="flex h-[300px] flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
-              <Badge variant="secondary" className="gap-1">
-                {mode === 'cloud' ? <Cloud className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
-                {mode === 'cloud' ? 'Cloud Runtime' : 'Browser Runtime'}
-              </Badge>
-              <div
-                className={cn(
-                  'flex items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                  runtimeTone === 'ready' && 'border-emerald-500/40 text-emerald-500',
-                  runtimeTone === 'pending' && 'border-amber-500/40 text-amber-500',
-                  runtimeTone === 'error' && 'border-destructive/40 text-destructive',
-                  runtimeTone === 'idle' && 'border-border/60 text-muted-foreground'
-                )}
-              >
+              <div className="flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium">
+                {mode === 'cloud' ? <Cloud className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
+                <span>{mode === 'cloud' ? 'Cloud' : 'Browser'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span
                   className={cn(
                     'h-2 w-2 rounded-full',
@@ -312,65 +305,51 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
               </div>
             </div>
 
-            <div className="rounded-md border bg-muted/20 p-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Python
-                </span>
-                <Select value={pythonVersion} onValueChange={setPythonVersion}>
-                  <SelectTrigger className="h-8 w-[150px] text-xs">
-                    <SelectValue placeholder="Select version" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3.11">Python 3.11</SelectItem>
-                    <SelectItem value="3.10">Python 3.10</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Separator className="my-3" />
-
-              <div className="flex flex-wrap items-start gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Session
-                </span>
-                <div className="flex flex-1 flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="text-[11px]">
-                    {mode === 'cloud'
-                      ? sessionId
-                        ? `Cloud session ${sessionId.slice(0, 8)}…`
-                        : 'No cloud session yet'
-                      : 'Browser session (per tab)'}
-                  </Badge>
-                  {mode === 'cloud' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => initializeCloud(projectId)}
-                      disabled={!cloudAvailable || cloudInitializing}
-                    >
-                      {cloudInitializing && <Loader2 className="h-3 w-3 animate-spin" />}
-                      {sessionId ? 'Reconnect' : 'Connect'}
-                    </Button>
-                  )}
+            <div className="rounded-md border bg-muted/20 px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">Python</span>
+                  <Select value={pythonVersion} onValueChange={setPythonVersion}>
+                    <SelectTrigger className="h-7 w-[110px] text-xs">
+                      <SelectValue placeholder="Version" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3.11">3.11</SelectItem>
+                      <SelectItem value="3.10">3.10</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                {mode === 'cloud' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => initializeCloud(projectId)}
+                    disabled={!cloudAvailable || cloudInitializing}
+                  >
+                    {cloudInitializing && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {sessionId ? 'Reconnect' : 'Connect'}
+                  </Button>
+                )}
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {mode === 'cloud'
-                  ? sessionId
-                    ? 'Cloud sessions keep installed packages and cache data for faster runs.'
-                    : 'Start a cloud session to cache packages and reuse datasets.'
-                  : 'Browser runtime keeps packages in-memory for this tab only.'}
-              </p>
             </div>
 
-            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+            <div className="mt-auto rounded-md border border-dashed p-3 text-xs text-muted-foreground space-y-2">
+              <div className="flex items-center gap-2">
+                <Info className="h-3.5 w-3.5" />
+                <span>
+                  {mode === 'cloud'
+                    ? sessionId
+                      ? `Cloud session ${sessionId.slice(0, 8)}… caches packages and data for faster runs.`
+                      : 'Cloud runtime will create a session on first run.'
+                    : 'Browser runtime keeps packages in-memory for this tab only.'}
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <Database className="h-4 w-4" />
                 <span>Datasets mount at `/workspace/datasets` and resolve via `resolve_dataset_path()`.</span>
               </div>
-              <div className="mt-2 flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Package className="h-4 w-4" />
                 <span>Install packages per session using pip (cloud) or micropip (browser).</span>
               </div>
@@ -467,9 +446,13 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                 variant="ghost"
                 size="icon"
                 title="Install packages"
-                className="h-10 w-10 rounded-full border border-foreground/20 bg-transparent text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10"
+                className="group h-10 w-10 rounded-full border border-foreground/20 bg-transparent text-foreground transition-colors duration-200 hover:bg-foreground/10"
               >
-                {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
+                {installing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <PackagePlus className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+                )}
                 <span className="sr-only">Install packages</span>
               </Button>
               <Button
@@ -477,12 +460,12 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                 size="icon"
                 onClick={handleRefreshPackages}
                 title="Refresh installed packages"
-                className="h-10 w-10 rounded-full border border-foreground/20 bg-transparent text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-foreground/10"
+                className="group h-10 w-10 rounded-full border border-foreground/20 bg-transparent text-foreground transition-colors duration-200 hover:bg-foreground/10"
               >
                 {refreshingPackages ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <RefreshCcw className="h-4 w-4" />
+                  <RefreshCcw className="h-4 w-4 transition-transform duration-200 group-hover:rotate-180" />
                 )}
               </Button>
             </div>
