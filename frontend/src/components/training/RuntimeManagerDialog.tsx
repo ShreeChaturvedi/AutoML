@@ -308,16 +308,22 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
             <div className="rounded-md border bg-muted/20 px-3 py-2">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Python</span>
-                  <Select value={pythonVersion} onValueChange={setPythonVersion}>
-                    <SelectTrigger className="h-7 w-[110px] text-xs">
-                      <SelectValue placeholder="Version" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="3.11">3.11</SelectItem>
-                      <SelectItem value="3.10">3.10</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <span className="text-xs font-medium text-muted-foreground">Version</span>
+                  {mode === 'cloud' ? (
+                    <Select value={pythonVersion} onValueChange={setPythonVersion}>
+                      <SelectTrigger className="h-7 w-[96px] text-xs">
+                        <SelectValue placeholder="Version" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3.11">3.11</SelectItem>
+                        <SelectItem value="3.10">3.10</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge variant="outline" className="text-[11px]">
+                      3.11 (Pyodide)
+                    </Badge>
+                  )}
                 </div>
                 {mode === 'cloud' && (
                   <Button
@@ -451,7 +457,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                 {installing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <PackagePlus className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
+                  <PackagePlus className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:rotate-6" />
                 )}
                 <span className="sr-only">Install packages</span>
               </Button>
@@ -465,7 +471,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                 {refreshingPackages ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <RefreshCcw className="h-4 w-4 transition-transform duration-200 group-hover:rotate-180" />
+                  <RefreshCcw className="h-4 w-4 transition-transform duration-200 group-hover:animate-spin" />
                 )}
               </Button>
             </div>

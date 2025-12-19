@@ -59,6 +59,7 @@ export const env = {
   executionTimeoutMs: parseInteger(process.env.EXECUTION_TIMEOUT_MS, 30000),
   executionMaxMemoryMb: parseInteger(process.env.EXECUTION_MAX_MEMORY_MB, 2048),
   executionMaxCpuPercent: parseInteger(process.env.EXECUTION_MAX_CPU_PERCENT, 100),
+  executionTmpfsMb: parseInteger(process.env.EXECUTION_TMPFS_MB, 1024),
   dockerEnabled: process.env.DOCKER_ENABLED !== 'false',
   dockerImage: process.env.DOCKER_IMAGE ?? 'automl-python-runtime:latest',
   executionNetwork: process.env.EXECUTION_NETWORK ?? 'bridge',

@@ -168,6 +168,8 @@ export async function createContainer(config: ContainerConfig): Promise<Containe
     const datasetsPath = join(workspacePath, 'datasets');
     await mkdir(datasetsPath, { recursive: true });
     await mkdir(join(workspacePath, '.python'), { recursive: true });
+    await mkdir(join(workspacePath, '.tmp'), { recursive: true });
+    await mkdir(join(workspacePath, '.cache', 'pip'), { recursive: true });
 
     // Build docker run command with security constraints
     const imageName = await ensureRuntimeImage(config.pythonVersion);
@@ -185,15 +187,16 @@ export async function createContainer(config: ContainerConfig): Promise<Containe
         '--cpus', `${env.executionMaxCpuPercent / 100}`,
         '--network', env.executionNetwork, // network policy
         '--read-only', // read-only root fs
-        '--tmpfs', '/tmp:rw,nosuid,size=200m', // writable tmp
+        '--tmpfs', `/tmp:rw,nosuid,size=${env.executionTmpfsMb}m`, // writable tmp
         '-v', `${absWorkspacePath}:/workspace:rw`, // mount workspace
         '-v', `${absDatasetsPath}:/datasets:ro`, // mount datasets read-only
         '-w', '/workspace',
         '--user', 'sandbox',
         '-e', 'HOME=/workspace',
         '-e', 'PYTHONPATH=/workspace/.python',
-        '-e', 'PIP_CACHE_DIR=/tmp/pip-cache',
+        '-e', 'PIP_CACHE_DIR=/workspace/.cache/pip',
         '-e', 'PIP_DISABLE_PIP_VERSION_CHECK=1',
+        '-e', 'TMPDIR=/workspace/.tmp',
         imageName,
         'tail', '-f', '/dev/null' // keep container running
     ];
@@ -437,25 +440,56 @@ export async function installPackage(
     }
 
     try {
-        const { stdout, stderr } = await execDocker(
-            [
-                'exec',
-                container.containerId,
-                'python',
-                '-m',
-                'pip',
-                'install',
-                '--no-cache-dir',
-                '--target',
-                '/workspace/.python',
-                ...requirements
-            ],
-            { timeout: 60000 }
-        );
+        const baseArgs = [
+            'exec',
+            container.containerId,
+            'python',
+            '-m',
+            'pip',
+            'install',
+            '--prefer-binary',
+            '--no-cache-dir',
+            '--target',
+            '/workspace/.python'
+        ];
+
+        const binaryAttempt = await runPipInstall([
+            ...baseArgs,
+            '--only-binary',
+            ':all:',
+            ...requirements
+        ]);
+
+        if (binaryAttempt.success) {
+            return {
+                success: true,
+                message: `${aliasNotice}${binaryAttempt.message || `Successfully installed ${requirements.join(', ')}`}`
+            };
+        }
+
+        if (isMissingBinaryError(binaryAttempt.details)) {
+            return {
+                success: false,
+                message: `${aliasNotice}No compatible binary wheels found for ${requirements.join(', ')} on this runtime.`
+                    + ' Try another package or build a custom runtime image.'
+            };
+        }
+
+        const sourceAttempt = await runPipInstall([
+            ...baseArgs,
+            ...requirements
+        ]);
+
+        if (sourceAttempt.success) {
+            return {
+                success: true,
+                message: `${aliasNotice}${sourceAttempt.message || `Successfully installed ${requirements.join(', ')}`}`
+            };
+        }
 
         return {
-            success: true,
-            message: `${aliasNotice}${stdout || stderr || `Successfully installed ${requirements.join(', ')}`}`
+            success: false,
+            message: `${aliasNotice}${formatInstallError(sourceAttempt.details, requirements)}`
         };
     } catch (error) {
         return {
@@ -500,6 +534,50 @@ export async function listPackages(container: Container): Promise<PackageInfo[]>
     } catch {
         return [];
     }
+}
+
+async function runPipInstall(args: string[]): Promise<{
+    success: boolean;
+    message?: string;
+    details: string;
+}> {
+    try {
+        const { stdout, stderr } = await execDocker(args, { timeout: 120000 });
+        return { success: true, message: stdout || stderr, details: `${stdout}\n${stderr}` };
+    } catch (error) {
+        const err = error as { message?: string; stdout?: string; stderr?: string };
+        const details = [err.stderr, err.stdout, err.message].filter(Boolean).join('\n');
+        return { success: false, details };
+    }
+}
+
+function isMissingBinaryError(details: string): boolean {
+    return (
+        details.includes('No matching distribution found') ||
+        details.includes('Could not find a version that satisfies') ||
+        details.includes('No compatible wheels')
+    );
+}
+
+function formatInstallError(details: string, requirements: string[]): string {
+    if (!details) {
+        return `Failed to install ${requirements.join(', ')}.`;
+    }
+    if (
+        details.includes('No space left on device') ||
+        details.includes('Errno 28')
+    ) {
+        return 'Install ran out of disk space in the runtime.'
+            + ' Increase `EXECUTION_TMPFS_MB` or clean up runtime storage and try again.';
+    }
+    if (details.includes('subprocess-exited-with-error') || details.includes('Failed building wheel')) {
+        return 'Package requires a native build step that failed in this runtime.'
+            + ' Consider using a package with prebuilt wheels or extend the runtime image with build tools.';
+    }
+    if (isMissingBinaryError(details)) {
+        return `No compatible binary wheels found for ${requirements.join(', ')} on this runtime.`;
+    }
+    return details.split('\n').slice(-6).join(' ');
 }
 
 function normalizePackageInput(input: string): { requirements: string[]; aliasNotice: string } {

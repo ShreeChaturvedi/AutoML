@@ -120,7 +120,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     },
 
     initializeCloud: async (projectId) => {
-        const { pythonVersion } = get();
+        const { pythonVersion, cloudAvailable: isCloudAvailable } = get();
         if (get().cloudInitializing) {
             return;
         }
@@ -128,7 +128,12 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         set({ cloudInitializing: true });
 
         try {
-            const session = await executionApi.createSession(projectId, pythonVersion);
+            const session = await Promise.race([
+                executionApi.createSession(projectId, pythonVersion),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Cloud runtime initialization timed out.')), 120000)
+                )
+            ]);
             set({
                 sessionId: session.id,
                 installedPackages: session.installedPackages ?? [],
@@ -140,7 +145,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         } catch (error) {
             console.error('[executionStore] Cloud initialization failed:', error);
             set({
-                cloudAvailable: false,
+                cloudAvailable: isCloudAvailable,
                 cloudInitializing: false,
                 sessionId: null
             });
