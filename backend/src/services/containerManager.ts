@@ -17,6 +17,7 @@ import type { PythonVersion, ExecutionResult, RichOutput, PackageInfo } from '..
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
+const PACKAGE_ALIASES = new Map<string, string>([['pytorch', 'torch']]);
 
 async function execDocker(
     args: string[],
@@ -430,6 +431,11 @@ export async function installPackage(
     container: Container,
     packageName: string
 ): Promise<{ success: boolean; message: string }> {
+    const { requirements, aliasNotice } = normalizePackageInput(packageName);
+    if (requirements.length === 0) {
+        return { success: false, message: 'No valid package name provided.' };
+    }
+
     try {
         const { stdout, stderr } = await execDocker(
             [
@@ -442,14 +448,14 @@ export async function installPackage(
                 '--no-cache-dir',
                 '--target',
                 '/workspace/.python',
-                packageName
+                ...requirements
             ],
             { timeout: 60000 }
         );
 
         return {
             success: true,
-            message: stdout || `Successfully installed ${packageName}`
+            message: `${aliasNotice}${stdout || stderr || `Successfully installed ${requirements.join(', ')}`}`
         };
     } catch (error) {
         return {
@@ -494,6 +500,37 @@ export async function listPackages(container: Container): Promise<PackageInfo[]>
     } catch {
         return [];
     }
+}
+
+function normalizePackageInput(input: string): { requirements: string[]; aliasNotice: string } {
+    const trimmed = input.trim();
+    if (!trimmed) {
+        return { requirements: [], aliasNotice: '' };
+    }
+
+    const tokens = trimmed
+        .split(',')
+        .flatMap((chunk) => chunk.trim().split(/\s+/))
+        .map((token) => token.trim())
+        .filter(Boolean);
+
+    const notices = new Set<string>();
+    const requirements = tokens.map((token) => {
+        const match = /^([A-Za-z0-9._-]+)(.*)$/.exec(token);
+        if (!match) return token;
+        const base = match[1] ?? token;
+        const suffix = match[2] ?? '';
+        const normalizedBase = base.toLowerCase().replace(/_/g, '-');
+        const alias = PACKAGE_ALIASES.get(normalizedBase);
+        if (!alias) return token;
+        notices.add(`"${base}" installs as "${alias}".`);
+        return `${alias}${suffix}`;
+    });
+
+    return {
+        requirements,
+        aliasNotice: notices.size > 0 ? `Note: ${Array.from(notices).join(' ')} ` : ''
+    };
 }
 
 /**

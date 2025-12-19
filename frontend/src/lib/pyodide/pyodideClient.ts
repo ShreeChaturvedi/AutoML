@@ -51,6 +51,7 @@ const BROWSER_UNSUPPORTED_PACKAGES = new Set([
     'pyspark',
     'prophet'
 ]);
+const PACKAGE_ALIASES = new Map<string, string>([['pytorch', 'torch']]);
 
 // Progress callback type
 export type ProgressCallback = (progress: number, message: string) => void;
@@ -273,24 +274,27 @@ export async function installPackage(packageName: string): Promise<{ success: bo
         return { success: false, message: 'Pyodide not initialized' };
     }
 
-    const normalized = normalizePackageName(packageName);
-    if (normalized && BROWSER_UNSUPPORTED_PACKAGES.has(normalized)) {
+    const { resolvedName, normalizedName, aliasNotice } = resolvePackageAlias(packageName);
+    if (!resolvedName.trim()) {
+        return { success: false, message: 'No package name provided.' };
+    }
+    if (normalizedName && BROWSER_UNSUPPORTED_PACKAGES.has(normalizedName)) {
         return {
             success: false,
-            message: `${packageName} requires native wheels and is not supported in browser mode. Switch to the cloud runtime to install it.`
+            message: `${aliasNotice}${packageName} requires native wheels and is not supported in browser mode. Switch to the cloud runtime to install it.`
         };
     }
 
-    if (loadedPackages.has(packageName)) {
-        return { success: true, message: `${packageName} already installed` };
+    if (loadedPackages.has(normalizedName)) {
+        return { success: true, message: `${aliasNotice}${resolvedName} already installed` };
     }
 
     try {
         // First try Pyodide built-in packages
         try {
-            await pyodideInstance.loadPackage(packageName);
-            loadedPackages.add(packageName);
-            return { success: true, message: `Installed ${packageName}` };
+            await pyodideInstance.loadPackage(resolvedName);
+            loadedPackages.add(normalizedName);
+            return { success: true, message: `${aliasNotice}Installed ${resolvedName}` };
         } catch {
             // Fall back to micropip for pure Python packages
         }
@@ -303,11 +307,11 @@ export async function installPackage(packageName: string): Promise<{ success: bo
 
         await pyodideInstance.runPythonAsync(`
 import micropip
-await micropip.install('${packageName}')
+await micropip.install('${resolvedName}')
 `);
 
-        loadedPackages.add(packageName);
-        return { success: true, message: `Installed ${packageName}` };
+        loadedPackages.add(normalizedName);
+        return { success: true, message: `${aliasNotice}Installed ${resolvedName}` };
     } catch (error) {
         const rawMessage = error instanceof Error ? error.message : 'Failed to install package';
         if (
@@ -317,12 +321,12 @@ await micropip.install('${packageName}')
         ) {
             return {
                 success: false,
-                message: `${packageName} is not available as a pure Python wheel for the browser runtime. Switch to the cloud runtime to install it.`
+                message: `${aliasNotice}${packageName} is not available as a pure Python wheel for the browser runtime. Switch to the cloud runtime to install it.`
             };
         }
         return {
             success: false,
-            message: rawMessage
+            message: `${aliasNotice}${rawMessage}`
         };
     }
 }
@@ -427,6 +431,35 @@ function normalizePackageName(input: string): string {
     const withoutExtras = firstToken.split('[')[0] ?? firstToken;
     const withoutSpecifier = withoutExtras.split(/[<>=!~]/)[0] ?? withoutExtras;
     return withoutSpecifier.trim().toLowerCase().replace(/_/g, '-');
+}
+
+function resolvePackageAlias(input: string): {
+    resolvedName: string;
+    normalizedName: string;
+    aliasNotice: string;
+} {
+    const trimmed = input.trim();
+    if (!trimmed) {
+        return { resolvedName: '', normalizedName: '', aliasNotice: '' };
+    }
+    const firstToken = trimmed.split(/[,\s]/)[0] ?? trimmed;
+    const match = /^([A-Za-z0-9._-]+)(.*)$/.exec(firstToken);
+    const base = match?.[1] ?? firstToken;
+    const suffix = match?.[2] ?? '';
+    const normalizedBase = base.trim().toLowerCase().replace(/_/g, '-');
+    const alias = PACKAGE_ALIASES.get(normalizedBase);
+    if (!alias) {
+        return {
+            resolvedName: trimmed,
+            normalizedName: normalizePackageName(trimmed),
+            aliasNotice: ''
+        };
+    }
+    return {
+        resolvedName: trimmed.replace(base, alias),
+        normalizedName: alias,
+        aliasNotice: `Note: "${base}" installs as "${alias}". `
+    };
 }
 
 function disableAmdLoader(): () => void {
