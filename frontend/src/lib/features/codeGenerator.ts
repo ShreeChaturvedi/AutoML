@@ -171,7 +171,9 @@ for _i in range(2, ${degree + 1}):
       const pattern = String(params.pattern ?? '');
       const caseSensitive = params.case_sensitive === true;
       return `${dataframeName}[${dst}] = ${dataframeName}[${src}].astype(str).str.contains(${stringLiteral(pattern)}, case=${caseSensitive ? 'True' : 'False'}, regex=False).astype(int)`;
-    }
+    },
+    missing_indicator: () =>
+      `${dataframeName}[${dst}] = ${dataframeName}[${src}].isna().astype(int)`
   };
 
   const generator = generators[method];

@@ -56,7 +56,8 @@ export type FeatureMethod =
   // Text
   | 'text_length'
   | 'word_count'
-  | 'contains_pattern';
+  | 'contains_pattern'
+  | 'missing_indicator';
 
 export interface FeatureTemplate {
   id: string;
@@ -173,6 +174,18 @@ export const FEATURE_TEMPLATES: FeatureTemplate[] = [
     suggestedFor: ['numeric'],
     estimatedImpact: 'high',
     previewFormula: 'log(1 + x)'
+  },
+  {
+    id: 'missing_indicator',
+    method: 'missing_indicator',
+    category: 'numeric_transform',
+    displayName: 'Missing Indicator',
+    description: 'Create a binary flag for missing values',
+    rationale: 'Missingness often carries predictive signal. A binary indicator preserves it without imputation bias.',
+    params: {},
+    suggestedFor: ['numeric', 'categorical', 'datetime', 'boolean', 'text'],
+    estimatedImpact: 'medium',
+    previewFormula: 'isnull(x)'
   },
   {
     id: 'sqrt_transform',
