@@ -3,13 +3,13 @@
  *
  * Features:
  * - Frosted glass card design
- * - Animated submit button with gradient icon
+ * - Animated submit button with glowing border
  * - Password strength indicator
  * - Password match indicator
  * - Token validation from URL
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { PasswordStrength } from './PasswordStrength';
 import { PasswordMatch } from './PasswordMatch';
 import { resetPassword } from '@/lib/api/auth';
-import { CheckCircle2, AlertCircle, KeyRound } from 'lucide-react';
+import { CheckCircle2, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react';
 import { AuthCard, AuthPageWrapper } from './AuthCard';
 import { AuthSubmitButton, type AuthButtonState } from './AuthSubmitButton';
 
@@ -95,19 +95,22 @@ export function ResetPasswordForm() {
         <AuthCard>
           <div className="space-y-6 text-center">
             <div className="flex justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-                <AlertCircle className="h-8 w-8 text-destructive" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+                <AlertCircle className="h-8 w-8 text-red-400" />
               </div>
             </div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight">Invalid reset link</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-2xl font-semibold tracking-tight text-white">Invalid reset link</h1>
+              <p className="text-sm text-neutral-400">
                 This password reset link is invalid or has expired. Please request a new one.
               </p>
             </div>
 
-            <Button asChild variant="secondary" className="w-full h-11">
-              <Link to="/forgot-password">Request new reset link</Link>
+            <Button asChild variant="secondary" className="w-full h-11 gap-2 bg-neutral-800 hover:bg-neutral-700 border-neutral-700">
+              <Link to="/forgot-password">
+                <ArrowLeft className="h-4 w-4" />
+                Request new reset link
+              </Link>
             </Button>
           </div>
         </AuthCard>
@@ -126,8 +129,8 @@ export function ResetPasswordForm() {
               </div>
             </div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight">Password reset successful</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-2xl font-semibold tracking-tight text-white">Password reset successful</h1>
+              <p className="text-sm text-neutral-400">
                 Your password has been changed. Redirecting to login...
               </p>
             </div>
@@ -144,12 +147,12 @@ export function ResetPasswordForm() {
           {/* Header */}
           <div className="space-y-2 text-center">
             <div className="flex justify-center mb-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                <KeyRound className="h-7 w-7 text-primary" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-neutral-800">
+                <KeyRound className="h-7 w-7 text-neutral-300" />
               </div>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight">Reset your password</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Reset your password</h1>
+            <p className="text-sm text-neutral-400">
               Enter a new password for your account
             </p>
           </div>
@@ -157,39 +160,39 @@ export function ResetPasswordForm() {
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password">New Password</Label>
+              <Label htmlFor="password" className="text-neutral-300">New Password</Label>
               <Input
                 id="password"
                 type="password"
                 placeholder="Create a new password"
                 autoComplete="new-password"
-                className="bg-transparent"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
                 {...register('password')}
               />
               <PasswordStrength password={password} />
               {errors.password && (
-                <p className="text-xs text-destructive">{errors.password.message}</p>
+                <p className="text-xs text-red-400">{errors.password.message}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+              <Label htmlFor="confirmPassword" className="text-neutral-300">Confirm New Password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 placeholder="Confirm your new password"
                 autoComplete="new-password"
-                className="bg-transparent"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
                 {...register('confirmPassword')}
               />
               <PasswordMatch password={password} confirmPassword={confirmPassword} />
               {errors.confirmPassword && (
-                <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
+                <p className="text-xs text-red-400">{errors.confirmPassword.message}</p>
               )}
             </div>
 
             {formError && (
-              <p className="text-sm text-destructive text-center">{formError}</p>
+              <p className="text-sm text-red-400 text-center">{formError}</p>
             )}
 
             <AuthSubmitButton
@@ -199,11 +202,12 @@ export function ResetPasswordForm() {
               successText="Password reset!"
             />
 
-            <p className="text-center text-sm text-muted-foreground">
-              <Link to="/login" className="text-primary hover:underline">
+            <Button asChild variant="ghost" className="w-full h-11 gap-2 text-neutral-400 hover:text-white hover:bg-neutral-800">
+              <Link to="/login">
+                <ArrowLeft className="h-4 w-4" />
                 Back to login
               </Link>
-            </p>
+            </Button>
           </form>
         </div>
       </AuthCard>

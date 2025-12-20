@@ -1,46 +1,19 @@
 /**
- * AuthSubmitButton - Professional animated submit button for auth forms
+ * AuthSubmitButton - Professional submit button for auth forms
  *
  * Features:
- * - Animated gradient icon (arrow/check)
+ * - Slide-in arrow animation on hover
  * - Loading spinner during submission
- * - Success checkmark animation
- * - Consistent styling with rest of app
+ * - Success checkmark
+ * - Glowing border effect that follows mouse
  */
 
-import { Loader2, Check } from 'lucide-react';
+import { Loader2, Check, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { GlowingEffect } from '@/components/ui/glowing-effect';
 import { cn } from '@/lib/utils';
 
 export type AuthButtonState = 'idle' | 'loading' | 'success';
-
-// Animated arrow icon with gradient
-function AnimatedArrowIcon() {
-  return (
-    <svg
-      className="h-4 w-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <defs>
-        <linearGradient id="authArrowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#60a5fa" />
-          <stop offset="50%" stopColor="#a78bfa" />
-          <stop offset="100%" stopColor="#f472b6" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M5 12h14M12 5l7 7-7 7"
-        stroke="url(#authArrowGradient)"
-        className="animate-pulse"
-      />
-    </svg>
-  );
-}
 
 interface AuthSubmitButtonProps {
   state?: AuthButtonState;
@@ -64,35 +37,43 @@ export function AuthSubmitButton({
   onClick
 }: AuthSubmitButtonProps) {
   return (
-    <Button
-      type={type}
-      variant="secondary"
-      disabled={state === 'loading' || disabled}
-      onClick={onClick}
-      className={cn(
-        'w-full h-11 text-sm font-medium transition-all duration-200 gap-2',
-        'hover:bg-secondary/80',
-        className
-      )}
+    <GlowingEffect
+      borderWidth={1}
+      className="rounded-lg"
     >
-      {state === 'loading' && (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>{loadingText}</span>
-        </>
-      )}
-      {state === 'success' && (
-        <>
-          <Check className="h-4 w-4 text-emerald-500" />
-          <span>{successText}</span>
-        </>
-      )}
-      {state === 'idle' && (
-        <>
-          <span>{idleText}</span>
-          <AnimatedArrowIcon />
-        </>
-      )}
-    </Button>
+      <Button
+        type={type}
+        variant="secondary"
+        disabled={state === 'loading' || disabled}
+        onClick={onClick}
+        className={cn(
+          'relative w-full h-11 text-sm font-medium transition-all duration-200',
+          'bg-neutral-800 hover:bg-neutral-700 border-neutral-700',
+          'group',
+          className
+        )}
+      >
+        {state === 'loading' && (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            <span>{loadingText}</span>
+          </>
+        )}
+        {state === 'success' && (
+          <>
+            <Check className="h-4 w-4 text-emerald-500 mr-2" />
+            <span>{successText}</span>
+          </>
+        )}
+        {state === 'idle' && (
+          <span className="relative inline-flex items-center">
+            <span className="transition-transform duration-200 group-hover:-translate-x-2">
+              {idleText}
+            </span>
+            <ArrowRight className="absolute -right-6 h-4 w-4 opacity-0 translate-x-0 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-1" />
+          </span>
+        )}
+      </Button>
+    </GlowingEffect>
   );
 }

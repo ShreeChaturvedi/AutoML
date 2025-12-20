@@ -15,6 +15,7 @@ import { ArrowLeft } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { Logo } from '@/components/ui/logo';
 import { PhaseList } from './PhaseList';
 import { ProjectList } from '@/components/projects/ProjectList';
 import { UserProfile } from '@/components/projects/UserProfile';
@@ -86,12 +87,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
             </Button>
           </>
         ) : (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <span className="text-sm font-bold">AI</span>
-            </div>
-            <span className="text-sm font-semibold text-foreground">AutoML Toolchain</span>
-          </div>
+          <Logo size="sm" className="text-foreground" />
         )}
       </div>
 

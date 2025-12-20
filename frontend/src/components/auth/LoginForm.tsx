@@ -2,12 +2,11 @@
  * LoginForm - User login page
  *
  * Features:
- * - Frosted glass card design
- * - Animated submit button with gradient icon
+ * - Spotlight effect background
+ * - Slide-in arrow button with glowing border
  * - Email and password authentication
- * - Remember me checkbox (extends token expiry)
- * - Google OAuth integration
- * - Link to forgot password and signup
+ * - Remember me checkbox
+ * - Google OAuth at the bottom
  */
 
 import { useEffect, useState } from 'react';
@@ -77,7 +76,6 @@ export function LoginForm() {
     setFormError(null);
     try {
       const response = await googleAuth();
-      // Redirect to Google OAuth
       if (response.authUrl) {
         window.location.href = response.authUrl;
       }
@@ -93,54 +91,35 @@ export function LoginForm() {
         <div className="space-y-6">
           {/* Header */}
           <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Welcome Back</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Welcome Back</h1>
+            <p className="text-sm text-neutral-400">
               Enter your credentials to access your account
             </p>
-          </div>
-
-          {/* Google OAuth */}
-          <GoogleAuthButton
-            onClick={handleGoogleAuth}
-            isLoading={googleLoading}
-            mode="login"
-          />
-
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or continue with email
-              </span>
-            </div>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-neutral-300">Email</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="you@example.com"
                 autoComplete="email"
-                className="bg-transparent"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
                 {...register('email')}
               />
               {errors.email && (
-                <p className="text-xs text-destructive">{errors.email.message}</p>
+                <p className="text-xs text-red-400">{errors.email.message}</p>
               )}
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-neutral-300">Password</Label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                  className="text-xs text-neutral-400 hover:text-white transition-colors"
                 >
                   Forgot password?
                 </Link>
@@ -150,11 +129,11 @@ export function LoginForm() {
                 type="password"
                 placeholder="Enter your password"
                 autoComplete="current-password"
-                className="bg-transparent"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
                 {...register('password')}
               />
               {errors.password && (
-                <p className="text-xs text-destructive">{errors.password.message}</p>
+                <p className="text-xs text-red-400">{errors.password.message}</p>
               )}
             </div>
 
@@ -170,7 +149,7 @@ export function LoginForm() {
                   />
                   <Label
                     htmlFor="rememberMe"
-                    className="text-sm font-normal cursor-pointer text-muted-foreground"
+                    className="text-sm font-normal cursor-pointer text-neutral-400"
                   >
                     Remember me for 30 days
                   </Label>
@@ -179,21 +158,28 @@ export function LoginForm() {
             />
 
             {formError && (
-              <p className="text-sm text-destructive text-center">{formError}</p>
+              <p className="text-sm text-red-400 text-center">{formError}</p>
             )}
 
             <AuthSubmitButton
               state={buttonState}
-              idleText="Sign In"
+              idleText="Continue"
               loadingText="Signing in..."
               successText="Welcome!"
             />
           </form>
 
+          {/* Google OAuth - at bottom */}
+          <GoogleAuthButton
+            onClick={handleGoogleAuth}
+            isLoading={googleLoading}
+            mode="login"
+          />
+
           {/* Footer */}
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-sm text-neutral-400">
             Don't have an account?{' '}
-            <Link to="/signup" className="text-primary hover:underline font-medium">
+            <Link to="/signup" className="text-white hover:underline font-medium">
               Sign up
             </Link>
           </p>

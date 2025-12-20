@@ -1,11 +1,9 @@
 /**
- * AuthCard - Frosted glass card container for auth forms
+ * AuthCard - Card container for auth forms with frosted glass effect
  *
  * Features:
- * - Frosted glass effect (backdrop blur + translucency)
- * - Subtle shadow and border
- * - Responsive sizing
- * - Optional decorative gradient background
+ * - Frosted glass effect (backdrop-blur shows page background)
+ * - Proper sizing for different form types
  */
 
 import { cn } from '@/lib/utils';
@@ -17,44 +15,37 @@ interface AuthCardProps {
 
 export function AuthCard({ children, className }: AuthCardProps) {
   return (
-    <div className="relative">
-      {/* Decorative gradient blobs for visual interest */}
-      <div className="absolute -top-20 -left-20 w-72 h-72 bg-primary/10 rounded-full blur-3xl opacity-50 pointer-events-none" />
-      <div className="absolute -bottom-20 -right-20 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl opacity-50 pointer-events-none" />
+    <div
+      className={cn(
+        'relative rounded-2xl',
+        // Frosted glass effect - semi-transparent with strong blur
+        'bg-white/[0.03] backdrop-blur-2xl',
+        // Border with subtle glow
+        'border border-white/[0.08]',
+        // Shadow
+        'shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
+        // Consistent size for all auth forms - explicit 400px width
+        'w-[400px] max-w-[calc(100vw-3rem)] p-8',
+        className
+      )}
+    >
+      {/* Inner glow at top */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-      {/* Main card with frosted glass effect */}
-      <div
-        className={cn(
-          'relative z-10',
-          'w-full max-w-md p-8',
-          'rounded-2xl',
-          // Frosted glass effect
-          'bg-background/80 backdrop-blur-xl',
-          'border border-border/50',
-          // Shadow for depth
-          'shadow-xl shadow-black/5 dark:shadow-black/20',
-          // Ring for subtle highlight
-          'ring-1 ring-white/10 dark:ring-white/5',
-          className
-        )}
-      >
-        {children}
-      </div>
+      {/* Content */}
+      <div className="relative z-10">{children}</div>
     </div>
   );
 }
 
 /**
- * AuthPageWrapper - Full page wrapper for auth screens with centered content
+ * AuthPageWrapper - Simple wrapper for auth card content
+ * Background elements are now in AuthLayout for persistence across navigation
  */
 interface AuthPageWrapperProps {
   children: React.ReactNode;
 }
 
 export function AuthPageWrapper({ children }: AuthPageWrapperProps) {
-  return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10 bg-background overflow-hidden">
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }

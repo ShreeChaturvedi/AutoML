@@ -2,11 +2,11 @@
  * SignupForm - User registration page
  *
  * Features:
- * - Frosted glass card design
- * - Animated submit button with gradient icon
- * - Password strength indicator
+ * - Wider card for more fields
+ * - Spotlight effect background
+ * - Password strength indicator (no label)
  * - Password match indicator
- * - Google OAuth integration
+ * - Google OAuth at the bottom
  */
 
 import { useEffect, useState } from 'react';
@@ -101,111 +101,99 @@ export function SignupForm() {
         <div className="space-y-6">
           {/* Header */}
           <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Create an Account</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Create an Account</h1>
+            <p className="text-sm text-neutral-400">
               Enter your information to get started
             </p>
           </div>
 
-          {/* Google OAuth */}
+          {/* Form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name" className="text-neutral-300">Name</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="John Doe"
+                autoComplete="name"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
+                {...register('name')}
+              />
+              {errors.name && (
+                <p className="text-xs text-red-400">{errors.name.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-neutral-300">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
+                {...register('email')}
+              />
+              {errors.email && (
+                <p className="text-xs text-red-400">{errors.email.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-neutral-300">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Create a password"
+                autoComplete="new-password"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
+                {...register('password')}
+              />
+              <PasswordStrength password={password} />
+              {errors.password && (
+                <p className="text-xs text-red-400">{errors.password.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-neutral-300">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Confirm your password"
+                autoComplete="new-password"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
+                {...register('confirmPassword')}
+              />
+              <PasswordMatch password={password} confirmPassword={confirmPassword} />
+              {errors.confirmPassword && (
+                <p className="text-xs text-red-400">{errors.confirmPassword.message}</p>
+              )}
+            </div>
+
+            {formError && (
+              <p className="text-sm text-red-400 text-center">{formError}</p>
+            )}
+
+            <AuthSubmitButton
+              state={buttonState}
+              idleText="Continue"
+              loadingText="Creating account..."
+              successText="Account created!"
+            />
+          </form>
+
+          {/* Google OAuth - at bottom */}
           <GoogleAuthButton
             onClick={handleGoogleAuth}
             isLoading={googleLoading}
             mode="signup"
           />
 
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or continue with email
-              </span>
-            </div>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="John Doe"
-                autoComplete="name"
-                className="bg-transparent"
-                {...register('name')}
-              />
-              {errors.name && (
-                <p className="text-xs text-destructive">{errors.name.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
-                className="bg-transparent"
-                {...register('email')}
-              />
-              {errors.email && (
-                <p className="text-xs text-destructive">{errors.email.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Create a password"
-                autoComplete="new-password"
-                className="bg-transparent"
-                {...register('password')}
-              />
-              <PasswordStrength password={password} />
-              {errors.password && (
-                <p className="text-xs text-destructive">{errors.password.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Confirm your password"
-                autoComplete="new-password"
-                className="bg-transparent"
-                {...register('confirmPassword')}
-              />
-              <PasswordMatch password={password} confirmPassword={confirmPassword} />
-              {errors.confirmPassword && (
-                <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
-              )}
-            </div>
-
-            {formError && (
-              <p className="text-sm text-destructive text-center">{formError}</p>
-            )}
-
-            <AuthSubmitButton
-              state={buttonState}
-              idleText="Create Account"
-              loadingText="Creating account..."
-              successText="Account created!"
-            />
-          </form>
-
           {/* Footer */}
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-sm text-neutral-400">
             Already have an account?{' '}
-            <Link to="/login" className="text-primary hover:underline font-medium">
+            <Link to="/login" className="text-white hover:underline font-medium">
               Sign in
             </Link>
           </p>

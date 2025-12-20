@@ -40,23 +40,16 @@ export function PasswordStrength({ password }: PasswordStrengthProps) {
   if (!password) return null;
 
   return (
-    <div className="space-y-2">
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div
-            key={i}
-            className={cn(
-              'h-1 flex-1 rounded-full transition-all',
-              i <= strength.score ? strength.color : 'bg-muted'
-            )}
-          />
-        ))}
-      </div>
-      {strength.label && (
-        <p className="text-xs text-muted-foreground">
-          Password strength: <span className="font-medium">{strength.label}</span>
-        </p>
-      )}
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div
+          key={i}
+          className={cn(
+            'h-1 flex-1 rounded-full transition-all',
+            i <= strength.score ? strength.color : 'bg-neutral-700'
+          )}
+        />
+      ))}
     </div>
   );
 }

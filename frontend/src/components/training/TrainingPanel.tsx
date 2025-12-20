@@ -35,7 +35,6 @@ import {
   Code,
   Loader2,
   BookOpen,
-  Lightbulb,
   Database,
   Wand2,
   Paperclip,
@@ -606,10 +605,10 @@ export function TrainingPanel() {
                   disabled={isAiThinking}
                   className="min-h-[90px]"
                 />
-                <InputGroupAddon align="block-end" className="border-t border-border/60">
+                <InputGroupAddon align="block-end">
                   <div className="flex flex-wrap items-center gap-2">
                     <Select value={assistantModel} onValueChange={setAssistantModel}>
-                      <SelectTrigger className="h-7 w-[170px] text-xs">
+                      <SelectTrigger className="h-7 w-[120px] text-xs">
                         <SelectValue placeholder="Model" />
                       </SelectTrigger>
                       <SelectContent>
@@ -634,7 +633,10 @@ export function TrainingPanel() {
                     </Select>
                   </div>
 
-                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <div className="ml-auto flex flex-wrap items-center gap-3">
+                    <span className="text-[10px] text-muted-foreground/60">
+                      ⇧ + ⏎ for newline
+                    </span>
                     <Badge variant="outline" className="text-[11px] gap-1">
                       <Brain className="h-3 w-3" />
                       {documentFiles.length} doc{documentFiles.length === 1 ? '' : 's'}
@@ -657,7 +659,7 @@ export function TrainingPanel() {
                       onClick={handleChatSubmit}
                       disabled={!chatInput.trim() || isAiThinking}
                       variant="ghost"
-                      className="h-9 w-9 rounded-full border border-foreground/20 bg-transparent p-0 text-foreground transition-transform duration-200 hover:-translate-y-0.5 hover:bg-foreground/10 focus-visible:ring-foreground/30"
+                      className="h-9 w-9 rounded-full border border-foreground/20 bg-transparent p-0 text-foreground hover:bg-foreground/10 focus-visible:ring-foreground/30"
                     >
                       <ArrowUp className="h-4 w-4" />
                     </InputGroupButton>
@@ -673,23 +675,18 @@ export function TrainingPanel() {
                 className="hidden"
               />
 
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Lightbulb className="h-3 w-3" />
-                  Enter to send, Shift+Enter for newline.
-                </span>
-                {attachmentMessage && (
+              {attachmentMessage && (
+                <div className="text-xs text-muted-foreground">
                   <span
                     className={cn(
-                      'text-xs',
                       attachmentStatus === 'success' && 'text-emerald-600',
                       attachmentStatus === 'error' && 'text-destructive'
                     )}
                   >
                     {attachmentMessage}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

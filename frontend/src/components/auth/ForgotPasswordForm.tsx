@@ -2,9 +2,8 @@
  * ForgotPasswordForm - Request password reset email
  *
  * Features:
- * - Frosted glass card design
- * - Animated submit button with gradient icon
- * - Email input with validation
+ * - Spotlight effect background
+ * - Slide-in arrow button
  * - Success state with visual feedback
  */
 
@@ -64,17 +63,17 @@ export function ForgotPasswordForm() {
               </div>
             </div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight">Check your email</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-2xl font-semibold tracking-tight text-white">Check your email</h1>
+              <p className="text-sm text-neutral-400">
                 If an account exists with that email address, we've sent instructions
                 to reset your password.
               </p>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-neutral-500">
               Didn't receive an email? Check your spam folder or contact support.
             </p>
 
-            <Button asChild variant="secondary" className="w-full h-11 gap-2">
+            <Button asChild variant="secondary" className="w-full h-11 gap-2 bg-neutral-800 hover:bg-neutral-700 border-neutral-700">
               <Link to="/login">
                 <ArrowLeft className="h-4 w-4" />
                 Back to login
@@ -93,12 +92,12 @@ export function ForgotPasswordForm() {
           {/* Header */}
           <div className="space-y-2 text-center">
             <div className="flex justify-center mb-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                <Mail className="h-7 w-7 text-primary" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-neutral-800">
+                <Mail className="h-7 w-7 text-neutral-300" />
               </div>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight">Forgot password?</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Forgot password?</h1>
+            <p className="text-sm text-neutral-400">
               Enter your email address and we'll send you instructions to reset your password.
             </p>
           </div>
@@ -106,32 +105,32 @@ export function ForgotPasswordForm() {
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-neutral-300">Email</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="you@example.com"
                 autoComplete="email"
-                className="bg-transparent"
+                className="bg-neutral-900/50 border-neutral-700 text-white placeholder:text-neutral-500"
                 {...register('email')}
               />
               {errors.email && (
-                <p className="text-xs text-destructive">{errors.email.message}</p>
+                <p className="text-xs text-red-400">{errors.email.message}</p>
               )}
             </div>
 
             {formError && (
-              <p className="text-sm text-destructive text-center">{formError}</p>
+              <p className="text-sm text-red-400 text-center">{formError}</p>
             )}
 
             <AuthSubmitButton
               state={buttonState}
-              idleText="Send Reset Instructions"
+              idleText="Send Instructions"
               loadingText="Sending..."
               successText="Email sent!"
             />
 
-            <Button asChild variant="ghost" className="w-full h-11 gap-2 text-muted-foreground">
+            <Button asChild variant="ghost" className="w-full h-11 gap-2 text-neutral-400 hover:text-white hover:bg-neutral-800">
               <Link to="/login">
                 <ArrowLeft className="h-4 w-4" />
                 Back to login
