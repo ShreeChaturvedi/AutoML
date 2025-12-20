@@ -7,6 +7,10 @@ export default {
   ],
   theme: {
     extend: {
+      fontSize: {
+        workflow: ['0.8125rem', { lineHeight: '1.1rem' }],
+        'workflow-label': ['0.75rem', { lineHeight: '1rem' }],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

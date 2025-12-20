@@ -11,6 +11,7 @@ import { FileText, AlertCircle } from 'lucide-react';
 import { QueryPanel } from './QueryPanel';
 import { FileTabBar } from './FileTabBar';
 import { DataTable } from './DataTable';
+import { DocumentViewer } from './DocumentViewer';
 import { useDataStore } from '@/stores/dataStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { executeNlQuery, executeSqlQuery } from '@/lib/api/query';
@@ -24,14 +25,30 @@ export function DataViewerTab() {
   const projects = useProjectStore((state) => state.projects);
   const activeProject = projects.find((p) => p.id === projectId);
 
-  const previews = useDataStore((state) => state.previews);
-  const files = useDataStore((state) => state.files);
-  const queryArtifacts = useDataStore((state) => state.queryArtifacts);
+  const allPreviews = useDataStore((state) => state.previews);
+  const allFiles = useDataStore((state) => state.files);
+  const allArtifacts = useDataStore((state) => state.queryArtifacts);
   const createArtifact = useDataStore((state) => state.createArtifact);
   const activeFileTabId = useDataStore((state) => state.activeFileTabId);
   const fileTabType = useDataStore((state) => state.fileTabType);
+  const openFileTabs = useDataStore((state) => state.openFileTabs);
   const setActiveFileTab = useDataStore((state) => state.setActiveFileTab);
   const hydrateFromBackend = useDataStore((state) => state.hydrateFromBackend);
+
+  const files = useMemo(
+    () => allFiles.filter((file) => file.projectId === projectId),
+    [allFiles, projectId]
+  );
+
+  const previews = useMemo(
+    () => allPreviews.filter((preview) => files.some((file) => file.id === preview.fileId)),
+    [allPreviews, files]
+  );
+
+  const queryArtifacts = useMemo(
+    () => allArtifacts.filter((artifact) => artifact.projectId === projectId),
+    [allArtifacts, projectId]
+  );
 
   // Hydrate data from backend on mount
   useEffect(() => {
@@ -41,14 +58,21 @@ export function DataViewerTab() {
   }, [projectId, hydrateFromBackend]);
 
   // Auto-select first tab if none selected
+  const openFileTabsForProject = useMemo(
+    () => openFileTabs.filter((tabId) => files.some((file) => file.id === tabId)),
+    [openFileTabs, files]
+  );
+
   useEffect(() => {
-    if (!activeFileTabId && previews.length > 0) {
-      const firstFile = files.find((f) => previews.some((p) => p.fileId === f.id));
-      if (firstFile) {
-        setActiveFileTab(firstFile.id, 'file');
-      }
+    if (activeFileTabId) return;
+    if (openFileTabsForProject.length > 0) {
+      setActiveFileTab(openFileTabsForProject[0], 'file');
+      return;
     }
-  }, [activeFileTabId, previews, files, setActiveFileTab]);
+    if (queryArtifacts.length > 0) {
+      setActiveFileTab(queryArtifacts[0].id, 'artifact');
+    }
+  }, [activeFileTabId, openFileTabsForProject, queryArtifacts, setActiveFileTab]);
 
   // Derive table names and columns for SQL autocomplete
   const tableNames = useMemo(() => {
@@ -165,7 +189,7 @@ export function DataViewerTab() {
     [activeProject, createArtifact, setActiveFileTab, tableNames]
   );
 
-  if (previews.length === 0) {
+  if (files.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="text-center space-y-4 max-w-md">
@@ -186,10 +210,22 @@ export function DataViewerTab() {
     if (!activeFileTabId) return null;
 
     if (fileTabType === 'file') {
-      const preview = previews.find((p) => p.fileId === activeFileTabId);
-      if (preview) {
-        return <DataTable preview={preview} />;
+      const file = files.find((f) => f.id === activeFileTabId);
+      if (!file) return null;
+
+      if (['csv', 'json', 'excel'].includes(file.type)) {
+        const preview = previews.find((p) => p.fileId === activeFileTabId);
+        if (preview) {
+          return <DataTable preview={preview} />;
+        }
+        return (
+          <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
+            No preview available for this dataset yet.
+          </div>
+        );
       }
+
+      return <DocumentViewer file={file} />;
     } else if (fileTabType === 'artifact') {
       const artifact = queryArtifacts.find((a) => a.id === activeFileTabId);
       if (artifact) {
@@ -242,7 +278,11 @@ export function DataViewerTab() {
       <div className="flex flex-1 overflow-hidden">
         {/* Data Display (left side) */}
         <div className="flex-1 min-w-0 overflow-auto">
-          {getActiveTabContent()}
+          {getActiveTabContent() ?? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Select a file from the sidebar to open it here.
+            </div>
+          )}
         </div>
 
         {/* Query Panel (right side) - collapsible with smooth animation */}

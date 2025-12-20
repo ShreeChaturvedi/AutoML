@@ -16,6 +16,7 @@ import * as LucideIcons from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Logo } from '@/components/ui/logo';
+import { FileExplorer } from '@/components/data/FileExplorer';
 import { PhaseList } from './PhaseList';
 import { ProjectList } from '@/components/projects/ProjectList';
 import { UserProfile } from '@/components/projects/UserProfile';
@@ -96,10 +97,13 @@ export function Sidebar({ collapsed }: SidebarProps) {
       {/* Main Content Section */}
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto">
-          <div className="p-4">
+          <div className="p-4 space-y-4">
             {activeProject ? (
-              /* Show phases when project is active */
-              <PhaseList />
+              <>
+                <PhaseList />
+                <Separator />
+                <FileExplorer projectId={activeProject.id} />
+              </>
             ) : (
               /* Show project list when no project is active */
               <ProjectList />

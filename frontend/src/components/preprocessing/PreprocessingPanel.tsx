@@ -33,7 +33,6 @@ import {
   Settings2
 } from 'lucide-react';
 import { usePreprocessingStore } from '@/stores/preprocessingStore';
-import { useDataStore } from '@/stores/dataStore';
 import { SuggestionCard } from './SuggestionCard';
 import { DataQualityOverview } from './DataQualityOverview';
 import type { Severity } from '@/types/preprocessing';
@@ -41,25 +40,18 @@ import type { Severity } from '@/types/preprocessing';
 export function PreprocessingPanel() {
   const { projectId } = useParams<{ projectId: string }>();
   
-  // Data store for uploaded files - use stable selectors to avoid infinite loops
-  const allFiles = useDataStore(s => s.files);
-  const files = useMemo(
-    () => allFiles.filter(f => f.projectId === projectId),
-    [allFiles, projectId]
-  );
-  
   // Preprocessing store
   const {
     analysis,
     metadata,
     tables,
-    selectedTable,
+    selectedDatasetId,
     isLoadingTables,
     isAnalyzing,
     error,
     suggestionStates,
     loadTables,
-    selectTable,
+    selectDataset,
     analyze,
     enableAllSuggestions,
     disableAllSuggestions,
@@ -67,38 +59,7 @@ export function PreprocessingPanel() {
   } = usePreprocessingStore();
 
   // Get tables that correspond to uploaded datasets
-  const availableTables = useMemo(() => {
-    // Tables from uploaded files (via metadata.tableName)
-    const fileTableNames = files
-      .filter(f => f.metadata?.tableName)
-      .map(f => ({
-        name: f.metadata!.tableName!,
-        displayName: f.name,
-        fromFile: true
-      }));
-
-    // All tables from backend
-    const allTables = tables.map(t => ({
-      name: t.name,
-      displayName: t.name,
-      fromFile: false,
-      sizeBytes: t.sizeBytes
-    }));
-
-    // Merge, preferring file names for display
-    const merged = new Map<string, typeof allTables[0]>();
-    for (const t of allTables) {
-      merged.set(t.name, t);
-    }
-    for (const t of fileTableNames) {
-      const existing = merged.get(t.name);
-      if (existing) {
-        merged.set(t.name, { ...existing, displayName: t.displayName, fromFile: true });
-      }
-    }
-
-    return Array.from(merged.values());
-  }, [files, tables]);
+  const availableTables = useMemo(() => tables, [tables]);
 
   // Load tables on mount
   useEffect(() => {
@@ -134,10 +95,10 @@ export function PreprocessingPanel() {
   const totalCount = analysis?.suggestions.length ?? 0;
 
   // Handle table selection and auto-analyze
-  const handleTableSelect = async (tableName: string) => {
-    selectTable(tableName);
+  const handleDatasetSelect = async (datasetId: string) => {
+    selectDataset(datasetId);
     if (projectId) {
-      await analyze(projectId, tableName);
+      await analyze(projectId, datasetId);
     }
   };
 
@@ -151,17 +112,14 @@ export function PreprocessingPanel() {
           </div>
           <div>
             <h2 className="text-lg font-semibold">Data Preprocessing</h2>
-            <p className="text-sm text-muted-foreground">
-              AI-powered suggestions to clean and prepare your data
-            </p>
           </div>
         </div>
 
         {/* Table selector */}
         <div className="flex items-center gap-3">
           <Select
-            value={selectedTable ?? ''}
-            onValueChange={handleTableSelect}
+            value={selectedDatasetId ?? ''}
+            onValueChange={handleDatasetSelect}
             disabled={isLoadingTables || availableTables.length === 0}
           >
             <SelectTrigger className="w-[250px]">
@@ -170,12 +128,14 @@ export function PreprocessingPanel() {
             </SelectTrigger>
             <SelectContent>
               {availableTables.map(table => (
-                <SelectItem key={table.name} value={table.name}>
+                <SelectItem key={table.datasetId} value={table.datasetId}>
                   <div className="flex items-center gap-2">
-                    <span>{table.displayName}</span>
-                    {table.fromFile && (
-                      <Badge variant="secondary" className="text-xs">uploaded</Badge>
-                    )}
+                    <span>{table.filename}</span>
+                    {table.nRows ? (
+                      <Badge variant="secondary" className="text-xs">
+                        {table.nRows.toLocaleString()} rows
+                      </Badge>
+                    ) : null}
                   </div>
                 </SelectItem>
               ))}
@@ -213,7 +173,9 @@ export function PreprocessingPanel() {
                     variant="outline" 
                     size="sm" 
                     className="mt-3"
-                    onClick={() => selectedTable && projectId && analyze(projectId, selectedTable)}
+                    onClick={() =>
+                      selectedDatasetId && projectId && analyze(projectId, selectedDatasetId)
+                    }
                   >
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Retry
@@ -226,7 +188,7 @@ export function PreprocessingPanel() {
       )}
 
       {/* Empty state - no table selected */}
-      {!selectedTable && !isAnalyzing && !error && (
+      {!selectedDatasetId && !isAnalyzing && !error && (
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center space-y-4 max-w-md">
             <div className="rounded-full bg-muted p-6 w-fit mx-auto">
@@ -369,4 +331,3 @@ export function PreprocessingPanel() {
     </div>
   );
 }
-

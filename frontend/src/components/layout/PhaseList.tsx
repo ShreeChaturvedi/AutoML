@@ -48,8 +48,8 @@ export function PhaseList() {
 
   return (
     <div className="space-y-1">
-      <div className="px-2 py-1.5">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+      <div className="px-2 py-1">
+        <h2 className="text-workflow-label font-semibold text-muted-foreground uppercase tracking-wider">
           Workflow
         </h2>
       </div>
@@ -70,7 +70,7 @@ export function PhaseList() {
               key={phase}
               onClick={() => handlePhaseClick(phase)}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left',
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left',
                 isActive
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-foreground hover:bg-muted'
@@ -79,14 +79,14 @@ export function PhaseList() {
               {/* Phase Icon */}
               <div
                 className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-md shrink-0',
+                  'flex h-7 w-7 items-center justify-center rounded-md shrink-0',
                   isActive ? 'bg-primary/20' : 'bg-muted'
                 )}
               >
                 {IconComponent && (
                   <IconComponent
                     className={cn(
-                      'h-4 w-4',
+                      'h-3.5 w-3.5',
                       isActive ? 'text-primary' : 'text-muted-foreground'
                     )}
                   />
@@ -95,7 +95,7 @@ export function PhaseList() {
 
               {/* Phase Label */}
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{config.label}</div>
+                <div className="text-workflow font-medium truncate">{config.label}</div>
               </div>
 
               {/* Completion Indicator */}

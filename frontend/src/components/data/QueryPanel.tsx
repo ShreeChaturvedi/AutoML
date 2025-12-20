@@ -208,54 +208,52 @@ export function QueryPanel({
     );
   }
 
+  // Detect if user is on Mac for keyboard shortcut display
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+  const modKey = isMac ? '⌘' : '⌃';
+
   return (
     <div className={cn('flex flex-col h-full bg-card border-l transition-all duration-300 ease-in-out', className)}>
-      {/* Header */}
-      <div className="p-4 border-b space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">Query Builder</h3>
+      {/* Header - single row with title, mode toggle, and collapse button */}
+      <div className="p-3 border-b">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground whitespace-nowrap">Query Builder</h3>
+
+          {/* Compact Mode Toggle */}
+          <ToggleGroup
+            type="single"
+            value={mode}
+            onValueChange={handleModeChange}
+            className="flex-1 bg-muted/50 p-0.5 rounded-md h-7"
+          >
+            <ToggleGroupItem
+              value="english"
+              aria-label="Natural language mode"
+              className="flex-1 h-6 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm px-2"
+            >
+              <MessageSquare className="h-3 w-3" />
+              <span className="ml-1.5">English</span>
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="sql"
+              aria-label="SQL mode"
+              className="flex-1 h-6 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm font-mono px-2"
+            >
+              <Code2 className="h-3 w-3" />
+              <span className="ml-1.5">SQL</span>
+            </ToggleGroupItem>
+          </ToggleGroup>
+
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onCollapsedChange?.(true)}
-            className="h-8 w-8"
+            className="h-7 w-7 shrink-0"
             title="Collapse Query Panel"
           >
             <PanelRightClose className="h-4 w-4" />
           </Button>
         </div>
-
-        {/* Mode Toggle - Better UI (Issue #3) */}
-        <ToggleGroup
-          type="single"
-          value={mode}
-          onValueChange={handleModeChange}
-          className="w-full bg-muted/50 p-1 rounded-lg"
-        >
-          <ToggleGroupItem
-            value="english"
-            aria-label="Natural language mode"
-            className="flex-1 data-[state=on]:bg-background data-[state=on]:shadow-sm"
-          >
-            <MessageSquare className="h-4 w-4" />
-            <span className="ml-2">English</span>
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="sql"
-            aria-label="SQL mode"
-            className="flex-1 data-[state=on]:bg-background data-[state=on]:shadow-sm font-mono"
-          >
-            <Code2 className="h-4 w-4" />
-            <span className="ml-2">SQL</span>
-          </ToggleGroupItem>
-        </ToggleGroup>
-
-        {/* Mode description */}
-        <p className="text-xs text-muted-foreground">
-          {mode === 'sql'
-            ? 'Write SQL queries to explore your data. Press Cmd/Ctrl+Enter to execute.'
-            : 'Describe what you want to see in plain English. Template-based NL→SQL (beta) will generate a query.'}
-        </p>
       </div>
 
       {/* Query Input */}
@@ -402,7 +400,7 @@ export function QueryPanel({
                   lineNumbersMinChars: 2, // Narrower line numbers column
                   glyphMargin: false, // Remove extra glyph margin
                   folding: false, // Remove folding margin
-                  lineDecorationsWidth: 0, // No decoration width
+                  lineDecorationsWidth: 8, // Spacing between line numbers and code
                   roundedSelection: false,
                   scrollBeyondLastLine: false,
                   readOnly: isExecuting,
@@ -440,7 +438,12 @@ export function QueryPanel({
       </div>
 
       {/* Execute Button */}
-      <div className="p-4 border-t">
+      <div className="px-4 pb-4 pt-2">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] text-muted-foreground/60">
+            {modKey} + ⏎ to execute
+          </span>
+        </div>
         <Button
           variant="secondary"
           onClick={handleExecute}

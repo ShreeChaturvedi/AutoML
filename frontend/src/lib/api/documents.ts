@@ -20,6 +20,16 @@ export interface SearchResult {
   span: { start: number; end: number };
 }
 
+export interface DocumentListItem {
+  documentId: string;
+  projectId?: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+}
+
 export interface AnswerCitation {
   chunkId: string;
   documentId: string;
@@ -57,6 +67,24 @@ export async function uploadDocument(projectId: string, file: File): Promise<Doc
   }
 
   return response.json() as Promise<DocumentUploadResponse>;
+}
+
+export async function listDocuments(projectId?: string): Promise<{ documents: DocumentListItem[] }> {
+  const url = projectId ? `/documents?projectId=${projectId}` : '/documents';
+  return apiRequest<{ documents: DocumentListItem[] }>(url, { method: 'GET' });
+}
+
+export async function downloadDocument(documentId: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/documents/${documentId}/download`, {
+    method: 'GET'
+  });
+
+  if (!response.ok) {
+    const message = response.statusText || 'Document download failed';
+    throw new Error(message);
+  }
+
+  return response.blob();
 }
 
 export async function searchDocuments(
