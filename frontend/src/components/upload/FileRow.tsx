@@ -113,6 +113,12 @@ export function FileRow({ file, onRemove, status, errorMessage }: FileRowProps) 
               {errorMessage}
             </p>
           )}
+          {status === 'uploaded' && file.metadata?.parseWarning && (
+            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {file.metadata.parseWarning}
+            </p>
+          )}
         </div>
 
         {/* Status indicator */}

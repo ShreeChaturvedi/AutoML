@@ -8,6 +8,7 @@ export interface DocumentUploadResponse {
     mimeType: string;
     chunkCount: number;
     embeddingDimension: number;
+    parseWarning?: string;
   };
 }
 
@@ -62,8 +63,17 @@ export async function uploadDocument(projectId: string, file: File): Promise<Doc
   });
 
   if (!response.ok) {
-    const message = response.statusText || 'Document upload failed';
-    throw new Error(message);
+    const fallbackMessage = response.statusText || 'Document upload failed';
+    try {
+      const payload = await response.json();
+      const message =
+        typeof payload?.details === 'string'
+          ? `${payload.error ?? 'Document upload failed'}: ${payload.details}`
+          : payload?.error ?? fallbackMessage;
+      throw new Error(message);
+    } catch {
+      throw new Error(fallbackMessage);
+    }
   }
 
   return response.json() as Promise<DocumentUploadResponse>;

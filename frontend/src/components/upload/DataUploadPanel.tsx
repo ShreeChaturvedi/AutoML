@@ -120,7 +120,8 @@ export function DataUploadPanel({ projectId }: DataUploadPanelProps) {
           documentId: document.documentId,
           chunkCount: document.chunkCount,
           embeddingDimension: document.embeddingDimension,
-          mimeType: document.mimeType
+          mimeType: document.mimeType,
+          parseWarning: document.parseWarning
         });
 
         setUploadStatus((prev) => ({ ...prev, [file.id]: 'uploaded' }));

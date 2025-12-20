@@ -50,6 +50,7 @@ export interface FileMetadata {
   documentId?: string;
   chunkCount?: number;
   embeddingDimension?: number;
+  parseWarning?: string;
 
   // PDF specific
   pageCount?: number;

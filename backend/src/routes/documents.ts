@@ -45,6 +45,11 @@ export function createDocumentRouter() {
         buffer: req.file.buffer,
         document: parsed
       });
+      const parseWarning =
+        parsed.parseError ||
+        (parsed.text.trim().length === 0
+          ? 'No text could be extracted from this document.'
+          : undefined);
 
       return res.status(201).json({
         document: {
@@ -53,7 +58,8 @@ export function createDocumentRouter() {
           filename: req.file.originalname,
           mimeType: req.file.mimetype ?? parsed.mimeType,
           chunkCount: ingested.chunkCount,
-          embeddingDimension: ingested.embeddingDimension
+          embeddingDimension: ingested.embeddingDimension,
+          parseWarning
         }
       });
     } catch (error) {
