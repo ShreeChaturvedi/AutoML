@@ -22,7 +22,9 @@ import {
   CheckCircle,
   Loader2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ArrowUp,
+  CornerDownLeft
 } from 'lucide-react';
 import type { Cell } from '@/types/training';
 import { cn } from '@/lib/utils';
@@ -281,7 +283,20 @@ export function CodeCell({
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">Run (Shift+Enter)</TooltipContent>
+                <TooltipContent side="top" className="flex items-center gap-2 text-xs">
+                  <span>Run</span>
+                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <kbd className="inline-flex h-5 w-5 items-center justify-center rounded border bg-muted/50">
+                      <ArrowUp className="h-3 w-3" />
+                      <span className="sr-only">Shift</span>
+                    </kbd>
+                    <span>+</span>
+                    <kbd className="inline-flex h-5 w-5 items-center justify-center rounded border bg-muted/50">
+                      <CornerDownLeft className="h-3 w-3" />
+                      <span className="sr-only">Enter</span>
+                    </kbd>
+                  </div>
+                </TooltipContent>
               </Tooltip>
             )}
 
@@ -357,7 +372,7 @@ export function CodeCell({
       {/* Output - compact toggle */}
       {richOutputs.length > 0 && (
         <div className="border-t">
-          <div className="flex min-h-[24px] items-center justify-between px-2 py-1">
+          <div className="flex min-h-[28px] items-center justify-between px-2 py-1.5">
             <button
               className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setShowOutput(!showOutput)}
@@ -369,7 +384,7 @@ export function CodeCell({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="h-5 w-5 p-0"
+                className="h-6 w-6 p-1"
                 onClick={async () => {
                   const text = richOutputs.map(o => o.content).join('\n');
                   await navigator.clipboard.writeText(text);
@@ -382,7 +397,7 @@ export function CodeCell({
           </div>
 
           {showOutput && (
-            <div className="px-3 pb-2 pt-0 text-xs font-mono">
+            <div className="px-3 pb-2 pt-2 text-xs font-mono">
               <CellOutputRenderer outputs={richOutputs} />
             </div>
           )}

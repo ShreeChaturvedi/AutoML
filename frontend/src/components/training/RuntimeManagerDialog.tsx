@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent
+} from 'react';
 import {
   Dialog,
   DialogContent,
@@ -66,9 +75,11 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [refreshingPackages, setRefreshingPackages] = useState(false);
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
   const suggestionsListId = useId();
   const blurTimeoutRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
+  const packagesContentRef = useRef<HTMLDivElement | null>(null);
 
   const {
     mode,
@@ -120,6 +131,41 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
       setActiveSuggestionIndex(-1);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setContentHeight(null);
+    }
+  }, [open]);
+
+  const maxContentHeight = useMemo(() => {
+    if (typeof window === 'undefined') return 520;
+    return Math.min(520, Math.floor(window.innerHeight * 0.7));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || contentHeight !== null) return;
+    const node = packagesContentRef.current;
+    if (!node) return;
+
+    const measure = () => {
+      const height = node.scrollHeight;
+      if (!height) return;
+      setContentHeight(Math.min(height, maxContentHeight));
+    };
+
+    const frame = window.requestAnimationFrame(measure);
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    open,
+    contentHeight,
+    maxContentHeight,
+    installedPackages.length,
+    selectedPackage?.name,
+    installProgress,
+    installMessage,
+    mode
+  ]);
 
   useEffect(() => {
     if (!open || !suggestionsOpen) return;
@@ -285,7 +331,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
     if (mode === 'cloud') {
       if (cloudInitializing) return 'Connecting';
       if (!cloudAvailable) return 'Unavailable';
-      return sessionId ? 'Connected' : 'Available';
+      return sessionId ? 'Connected' : 'Ready to connect';
     }
 
     if (pyodideReady) return 'Ready';
@@ -293,7 +339,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
     return 'Idle';
   }, [mode, cloudInitializing, cloudAvailable, sessionId, pyodideReady, pyodideInitializing, pyodideProgress]);
   const runtimeTone = useMemo(() => {
-    if (runtimeStatus === 'Connected' || runtimeStatus === 'Ready') return 'ready';
+    if (runtimeStatus === 'Connected') return 'ready';
     if (runtimeStatus === 'Connecting' || runtimeStatus.startsWith('Loading')) return 'pending';
     if (runtimeStatus === 'Unavailable') return 'error';
     return 'idle';
@@ -326,7 +372,13 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
             <TabsTrigger value="datasets">Datasets</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="runtime" className="flex h-[300px] flex-col gap-4">
+          <div className="relative mt-4">
+            <TabsContent
+              value="runtime"
+              forceMount
+              style={contentHeight ? { height: contentHeight } : undefined}
+              className="flex min-h-0 flex-col gap-4 data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
+            >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium">
                 {mode === 'cloud' ? <Cloud className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
@@ -401,10 +453,16 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                 <span>Install packages per session using pip (cloud) or micropip (browser).</span>
               </div>
             </div>
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="packages" className="flex h-[300px] flex-col gap-4">
-            <div className="space-y-3">
+            <TabsContent
+              value="packages"
+              forceMount
+              ref={packagesContentRef}
+              style={contentHeight ? { height: contentHeight } : undefined}
+              className="flex min-h-0 flex-col gap-4 data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
+            >
+            <div className="space-y-3 min-h-0">
               <div className="flex flex-wrap items-start gap-2">
                 <div className="relative flex-1 min-w-[240px]">
                   <Input
@@ -459,7 +517,10 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                           role="option"
                           aria-selected={index === activeSuggestionIndex}
                           onMouseDown={(event) => event.preventDefault()}
-                          onMouseEnter={() => setSelectedPackage(pkg)}
+                          onMouseEnter={() => {
+                            setSelectedPackage(pkg);
+                            setActiveSuggestionIndex(index);
+                          }}
                           onClick={() => handleSuggestionSelect(pkg)}
                           className={cn(
                             'w-full rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
@@ -575,6 +636,9 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                   Browser runtime supports pure Python wheels only. Use cloud runtime for native packages (e.g. torch).
                 </p>
               )}
+              <p className="text-[11px] text-muted-foreground">
+                Refresh syncs the installed package list from the active runtime.
+              </p>
             </div>
 
             <ScrollArea className="min-h-0 flex-1 rounded-md border p-3">
@@ -610,14 +674,29 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                       {pkg.summary && (
                         <p className="mt-1 text-xs text-muted-foreground">{pkg.summary}</p>
                       )}
+                      {pkg.homepage && (
+                        <a
+                          href={pkg.homepage}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex text-[11px] text-muted-foreground hover:text-foreground"
+                        >
+                          {pkg.homepage}
+                        </a>
+                      )}
                     </div>
                   ))
                 )}
               </div>
             </ScrollArea>
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="datasets" className="flex h-[300px] flex-col gap-4">
+            <TabsContent
+              value="datasets"
+              forceMount
+              style={contentHeight ? { height: contentHeight } : undefined}
+              className="flex min-h-0 flex-col gap-4 data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
+            >
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="text-xs">
                 {datasetFiles.length} dataset{datasetFiles.length === 1 ? '' : 's'}
@@ -657,7 +736,8 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
                 )}
               </div>
             </ScrollArea>
-          </TabsContent>
+            </TabsContent>
+          </div>
         </Tabs>
       </DialogContent>
     </Dialog>
