@@ -49,6 +49,7 @@ export async function parseDocument(buffer: Buffer, mimeType?: string): Promise<
  * pdf-parse v2 exports PDFParse class that needs to be instantiated
  */
 async function parsePdfBuffer(buffer: Buffer): Promise<{ text: string; parseError?: string }> {
+  await ensurePdfDomPolyfills();
   const primaryAttempt = await parsePdfWithPdfParse(buffer).catch((error) => {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[documentParser] PDFParse failed:', message);
@@ -73,6 +74,31 @@ async function parsePdfBuffer(buffer: Buffer): Promise<{ text: string; parseErro
     text: '',
     parseError: primaryAttempt.parseError || fallbackAttempt.parseError || 'No text extracted from PDF'
   };
+}
+
+async function ensurePdfDomPolyfills(): Promise<void> {
+  if (typeof (globalThis as { DOMMatrix?: unknown }).DOMMatrix !== 'undefined') {
+    return;
+  }
+
+  try {
+    const canvas = await import('@napi-rs/canvas');
+    const domMatrix = canvas.DOMMatrix;
+    const domPoint = canvas.DOMPoint;
+    const domRect = canvas.DOMRect;
+
+    if (domMatrix && typeof (globalThis as { DOMMatrix?: unknown }).DOMMatrix === 'undefined') {
+      (globalThis as { DOMMatrix?: unknown }).DOMMatrix = domMatrix;
+    }
+    if (domPoint && typeof (globalThis as { DOMPoint?: unknown }).DOMPoint === 'undefined') {
+      (globalThis as { DOMPoint?: unknown }).DOMPoint = domPoint;
+    }
+    if (domRect && typeof (globalThis as { DOMRect?: unknown }).DOMRect === 'undefined') {
+      (globalThis as { DOMRect?: unknown }).DOMRect = domRect;
+    }
+  } catch (error) {
+    console.warn('[documentParser] DOMMatrix polyfill failed:', error);
+  }
 }
 
 async function parsePdfWithPdfParse(buffer: Buffer): Promise<{ text: string; parseError?: string }> {
