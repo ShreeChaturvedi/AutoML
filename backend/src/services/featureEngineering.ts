@@ -51,7 +51,8 @@ export const FEATURE_METHODS = [
   'product',
   'text_length',
   'word_count',
-  'contains_pattern'
+  'contains_pattern',
+  'missing_indicator'
 ] as const;
 
 export type FeatureMethod = typeof FEATURE_METHODS[number];
@@ -281,6 +282,8 @@ ${dataframeName}[${prefix} + '_cos'] = np.cos(2 * np.pi * _val / ${mapping.perio
       const caseSensitive = pyBool(params.case_sensitive, false);
       return `${dataframeName}[${dst}] = ${dataframeName}[${src}].astype(str).str.contains(${pattern}, case=${caseSensitive}, regex=False).astype(int)`;
     }
+    case 'missing_indicator':
+      return `${dataframeName}[${dst}] = ${dataframeName}[${src}].isna().astype(int)`;
     default:
       return `# Unsupported method: ${feature.method}`;
   }

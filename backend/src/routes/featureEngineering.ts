@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { applyFeatureEngineering, FEATURE_METHODS } from '../services/featureEngineering.js';
+import { generateFeaturePlan } from '../services/featurePlanner.js';
 import { sanitizeTableName } from '../services/datasetLoader.js';
 
 const featureSpecSchema = z.object({
@@ -32,8 +33,34 @@ const applySchema = z.object({
   features: z.array(featureSpecSchema).min(1)
 });
 
+const planSchema = z.object({
+  projectId: z.string().min(1),
+  datasetId: z.string().min(1),
+  targetColumn: z.string().optional(),
+  problemType: z.enum(['classification', 'regression', 'clustering', 'forecasting', 'unspecified']).optional()
+});
+
 export function createFeatureEngineeringRouter() {
   const router = Router();
+
+  router.post('/feature-engineering/plan', async (req, res) => {
+    const parsed = planSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        details: parsed.error.flatten()
+      });
+    }
+
+    try {
+      const plan = await generateFeaturePlan(parsed.data);
+      return res.status(200).json({ plan });
+    } catch (error) {
+      console.error('[feature-engineering] Plan failed:', error);
+      const message = error instanceof Error ? error.message : 'Failed to generate feature plan';
+      return res.status(400).json({ error: message });
+    }
+  });
 
   router.post('/feature-engineering/apply', async (req, res) => {
     const parsed = applySchema.safeParse(req.body);
