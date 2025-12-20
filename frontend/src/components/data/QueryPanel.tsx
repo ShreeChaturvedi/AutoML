@@ -16,7 +16,7 @@ import { useState, useCallback, Suspense, lazy, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, MessageSquare, Code2, PanelRightClose, PanelRight } from 'lucide-react';
+import { Loader2, MessageSquare, Code2, PanelRightClose } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/theme-provider';
 import type { QueryMode } from '@/types/file';
@@ -106,12 +106,12 @@ export function QueryPanel({
   onCollapsedChange
 }: QueryPanelProps) {
   const [mode, setMode] = useState<QueryMode>('sql');
-  
-  // Separate state for each mode (Issue #5)
+
+  // Separate state for each mode to preserve inputs when switching
   const [sqlQuery, setSqlQuery] = useState<string>(DEFAULT_SQL);
   const [englishQuery, setEnglishQuery] = useState<string>(DEFAULT_ENGLISH);
-  
-  // Get current theme for Monaco Editor (Issue #2)
+
+  // Theme detection for Monaco Editor
   const { theme: appTheme } = useTheme();
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
   
@@ -148,7 +148,7 @@ export function QueryPanel({
   // Get current query based on mode
   const currentQuery = mode === 'sql' ? sqlQuery : englishQuery;
 
-  // Handle mode toggle (Issue #3)
+  // Handle mode toggle
   const handleModeChange = useCallback((value: string) => {
     if (value === 'sql' || value === 'english') {
       setMode(value as QueryMode);
@@ -183,22 +183,30 @@ export function QueryPanel({
     [handleExecute]
   );
 
-  // Collapsed state - just show a thin bar with expand button
+  // Detect if user is on Mac for keyboard shortcut display
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+  const modKey = isMac ? '⌘' : '⌃';
+
+  // Collapsed state - clickable bar to expand
   if (collapsed) {
     return (
-      <div className={cn(
-        'flex flex-col h-full bg-card border-l items-center py-4 transition-all duration-300 ease-in-out',
-        className
-      )}>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onCollapsedChange?.(false)}
-          className="mb-2"
-          title="Expand Query Panel"
-        >
-          <PanelRight className="h-4 w-4" />
-        </Button>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onCollapsedChange?.(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onCollapsedChange?.(false);
+          }
+        }}
+        className={cn(
+          'flex flex-col h-full bg-card border-l items-center py-4 transition-all duration-300 ease-in-out',
+          'cursor-[w-resize] hover:bg-muted/50',
+          className
+        )}
+        title="Expand Query Panel"
+      >
         <div className="flex-1 flex items-center justify-center">
           <span className="text-xs text-muted-foreground [writing-mode:vertical-lr] rotate-180">
             Query Builder
@@ -207,10 +215,6 @@ export function QueryPanel({
       </div>
     );
   }
-
-  // Detect if user is on Mac for keyboard shortcut display
-  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
-  const modKey = isMac ? '⌘' : '⌃';
 
   return (
     <div className={cn('flex flex-col h-full bg-card border-l transition-all duration-300 ease-in-out', className)}>
@@ -257,10 +261,10 @@ export function QueryPanel({
       </div>
 
       {/* Query Input */}
-      <div className="flex-1 flex flex-col min-h-0 p-4">
+      <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 pb-2">
         {mode === 'sql' ? (
-          // SQL Mode: Monaco Editor with syntax highlighting (Issue #1 & #2)
-          <div className="flex-1 border rounded-md overflow-hidden bg-background">
+          // SQL Mode: Monaco Editor with syntax highlighting
+          <div className="relative flex-1 border rounded-md overflow-hidden bg-background">
             <Suspense
               fallback={
                 <div className="flex items-center justify-center h-full">
@@ -422,28 +426,33 @@ export function QueryPanel({
                 }}
               />
             </Suspense>
+            {/* Keyboard shortcut hint */}
+            <span className="absolute bottom-2 right-2 text-xs text-muted-foreground/50 pointer-events-none select-none">
+              {modKey} + ⏎
+            </span>
           </div>
         ) : (
-          // English Mode: Simple textarea
-          <Textarea
-            value={englishQuery}
-            onChange={(e) => handleQueryChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Describe what you want to see in plain English... For example: Show me all rows where revenue is greater than 1000"
-            disabled={isExecuting}
-            className="flex-1 resize-none leading-relaxed focus-visible:ring-1"
-            aria-label="Natural language query input"
-          />
+          // English Mode: Simple textarea with hint
+          <div className="relative flex-1 flex flex-col">
+            <Textarea
+              value={englishQuery}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Describe what you want to see in plain English... For example: Show me all rows where revenue is greater than 1000"
+              disabled={isExecuting}
+              className="flex-1 resize-none leading-relaxed focus-visible:ring-1"
+              aria-label="Natural language query input"
+            />
+            {/* Keyboard shortcut hint */}
+            <span className="absolute bottom-2 right-2 text-xs text-muted-foreground/50 pointer-events-none select-none">
+              {modKey} + ⏎
+            </span>
+          </div>
         )}
       </div>
 
       {/* Execute Button */}
-      <div className="px-4 pb-4 pt-2">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-muted-foreground/60">
-            {modKey} + ⏎ to execute
-          </span>
-        </div>
+      <div className="px-3 pb-3">
         <Button
           variant="secondary"
           onClick={handleExecute}
