@@ -13,6 +13,7 @@ Last verified: 2025-12-18
 - Answer endpoint that composes responses from retrieved snippets (no LLM).
 - Preprocessing analysis endpoint with heuristic suggestions based on sampled data.
 - Auth endpoints wired (register/login/refresh/logout/me/profile) when Postgres is configured.
+- Model training API with template-based sklearn runners and file-backed model registry.
 
 ### Frontend
 - Project creation + workflow phases via AppShell/Sidebar.
@@ -22,6 +23,7 @@ Last verified: 2025-12-18
 - Feature engineering UI + apply flow that generates derived datasets.
 - Training UI: model templates + code cells + RAG Q&A (Pyodide + Docker runtime).
 - Auth routes + screens (login/signup/forgot/reset/profile) with token refresh handling.
+- Experiments panel with model training controls and registry list.
 
 ### Testing
 - Backend unit tests for core services + routes (health/projects/datasets/query) and dataset loader parsing.
@@ -37,6 +39,7 @@ Last verified: 2025-12-18
 - DuckDB: client library exists but is unused; backend Postgres is active query engine.
 - Document uploads: wired for PDF/Markdown/TXT (docx not supported yet).
 - Package management UI wired into runtime manager (pip/micropip).
+- Deployment phase remains placeholder UI.
 
 ## Known Issues (High Priority)
 

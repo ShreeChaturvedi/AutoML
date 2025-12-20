@@ -213,6 +213,115 @@ Related endpoints:
 
 ---
 
+## `/api/models/templates` (GET)
+
+**Response**
+
+```ts
+interface ModelTemplate {
+  id: string;
+  name: string;
+  taskType: 'classification' | 'regression' | 'clustering';
+  description: string;
+  library: string;
+  parameters: Array<{
+    key: string;
+    label: string;
+    type: 'number' | 'string' | 'boolean' | 'select';
+    default: unknown;
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: Array<{ value: string; label: string }>;
+  }>;
+  metrics: string[];
+}
+
+interface ModelTemplatesResponse {
+  templates: ModelTemplate[];
+}
+```
+
+## `/api/models/train` (POST)
+
+**Request**
+
+```ts
+interface TrainModelRequest {
+  projectId: string;
+  datasetId: string;
+  templateId: string;
+  targetColumn?: string; // required for classification/regression
+  parameters?: Record<string, unknown>;
+  testSize?: number; // 0.05 - 0.5
+  name?: string;
+}
+```
+
+**Response**
+
+```ts
+interface ModelRecord {
+  modelId: string;
+  projectId: string;
+  datasetId: string;
+  name: string;
+  templateId: string;
+  taskType: 'classification' | 'regression' | 'clustering';
+  library: string;
+  algorithm: string;
+  parameters: Record<string, unknown>;
+  metrics: Record<string, number>;
+  status: 'completed' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+  trainingMs?: number;
+  targetColumn?: string;
+  featureColumns?: string[];
+  sampleCount?: number;
+  artifact?: { filename: string; path: string; size: number };
+  error?: string;
+}
+
+interface TrainModelResponse {
+  success: boolean;
+  message: string;
+  model: ModelRecord;
+}
+```
+
+## `/api/models` (GET)
+
+Query parameters:
+
+| Param      | Description          |
+| ---------- | -------------------- |
+| `projectId`| Optional UUID filter |
+
+**Response**
+
+```ts
+interface ModelsListResponse {
+  models: ModelRecord[];
+}
+```
+
+## `/api/models/:id` (GET)
+
+**Response**
+
+```ts
+interface ModelResponse {
+  model: ModelRecord;
+}
+```
+
+## `/api/models/:id/artifact` (GET)
+
+Downloads the stored model artifact.
+
+---
+
 ## `/api/auth/*`
 
 Auth endpoints (JWT access + refresh tokens):

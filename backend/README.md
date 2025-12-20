@@ -30,6 +30,8 @@ STORAGE_PATH=storage/projects.json
 DATASET_METADATA_PATH=storage/datasets/metadata.json
 DATASET_STORAGE_DIR=storage/datasets/files
 DOCUMENT_STORAGE_DIR=storage/documents/files
+MODEL_METADATA_PATH=storage/models/metadata.json
+MODEL_STORAGE_DIR=storage/models/artifacts
 DATABASE_URL=postgres://postgres:automl@localhost:5433/automl
 PGSSLMODE=disable
 PG_POOL_MIN=0
@@ -120,6 +122,13 @@ AUTOML_BENCH_PIPELINING=1
 
 ### Feature Engineering
 - `POST /api/feature-engineering/apply`
+
+### Models
+- `GET /api/models/templates`
+- `GET /api/models`
+- `GET /api/models/:id`
+- `GET /api/models/:id/artifact`
+- `POST /api/models/train`
 
 ### Execution (Docker required)
 - `POST /api/execute`

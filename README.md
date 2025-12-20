@@ -12,6 +12,7 @@ AI-augmented AutoML workspace built as a TypeScript monorepo with a React fronte
 - Document ingestion (PDF/Markdown/TXT), chunking, lightweight embeddings, and search.
 - RAG-style answering using retrieved snippets (no LLM yet).
 - Training code execution via Pyodide (browser) and Docker runtime (cloud) with package management.
+- Model training API (template-based sklearn runners) with a file-backed registry.
 - Playwright benchmark flow and a simple NL→SQL/RAG eval runner.
 - Auth flows (login/signup/reset/profile) backed by JWT + refresh tokens when Postgres is configured.
 

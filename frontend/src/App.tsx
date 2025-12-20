@@ -18,6 +18,8 @@ import { DataViewerTab } from '@/components/data/DataViewerTab';
 import { PreprocessingPanel } from '@/components/preprocessing/PreprocessingPanel';
 import { FeatureEngineeringPanel } from '@/components/features/FeatureEngineeringPanel';
 import { TrainingPanel } from '@/components/training/TrainingPanel';
+import { ExperimentsPanel } from '@/components/experiments/ExperimentsPanel';
+import { AuthLayout } from '@/components/auth/AuthLayout';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { GoogleOAuthCallback } from '@/components/auth/GoogleOAuthCallback';
 import { LoginForm } from '@/components/auth/LoginForm';
@@ -200,19 +202,7 @@ function ProjectWorkspace() {
       return <TrainingPanel />;
 
     case 'experiments':
-      return (
-        <div className="flex h-full items-center justify-center p-6">
-          <div className="text-center space-y-2">
-            <h3 className="text-lg font-semibold text-foreground">Experiments</h3>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Experiment tracking dashboard with metrics, visualizations, and model comparison.
-            </p>
-            <p className="text-xs text-muted-foreground italic">
-              TODO: Implement experiment tracking UI.
-            </p>
-          </div>
-        </div>
-      );
+      return <ExperimentsPanel />;
 
     case 'deployment':
       return (
@@ -338,10 +328,14 @@ function App() {
     <BrowserRouter>
       <div className="min-h-screen w-full bg-background text-foreground">
         <Routes>
-          <Route path="/login" element={<LoginForm />} />
-          <Route path="/signup" element={<SignupForm />} />
-          <Route path="/forgot-password" element={<ForgotPasswordForm />} />
-          <Route path="/reset-password" element={<ResetPasswordForm />} />
+          {/* Auth routes share AuthLayout so background persists across navigation */}
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<LoginForm />} />
+            <Route path="/signup" element={<SignupForm />} />
+            <Route path="/forgot-password" element={<ForgotPasswordForm />} />
+            <Route path="/reset-password" element={<ResetPasswordForm />} />
+            <Route path="/auth/google/callback" element={<GoogleOAuthCallback />} />
+          </Route>
           {/* Profile is a dedicated full-page route outside AppShell */}
           <Route
             path="/profile"

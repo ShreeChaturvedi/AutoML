@@ -42,6 +42,8 @@ export const env = {
   datasetStorageDir: process.env.DATASET_STORAGE_DIR ?? 'storage/datasets/files',
   documentStorageDir: process.env.DOCUMENT_STORAGE_DIR ?? 'storage/documents/files',
   datasetMetadataPath: process.env.DATASET_METADATA_PATH ?? 'storage/datasets/metadata.json',
+  modelStorageDir: process.env.MODEL_STORAGE_DIR ?? 'storage/models/artifacts',
+  modelMetadataPath: process.env.MODEL_METADATA_PATH ?? 'storage/models/metadata.json',
   databaseUrl: process.env.DATABASE_URL,
   pgSslMode: process.env.PGSSLMODE ?? 'disable',
   pgPoolMin: parseInteger(process.env.PG_POOL_MIN, 0),

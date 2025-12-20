@@ -60,6 +60,7 @@ graph TD
   - `backend/src/routes/preprocessing.ts` – Preprocessing analysis + suggestion endpoints.
   - `backend/src/routes/featureEngineering.ts` – Applies feature specs and writes derived datasets.
   - `backend/src/routes/execution.ts` – Python execution sessions, package installs, and runtime health.
+  - `backend/src/routes/models.ts` – Model templates, training runs, and artifact downloads.
 - **Persistence & services**:
   - `backend/src/repositories/projectRepository.ts` – File-backed project store with schema sanitization and in-memory fallback.
   - `backend/src/repositories/datasetRepository.ts` – File-backed dataset metadata store with UUID identities.

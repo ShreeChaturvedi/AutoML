@@ -12,6 +12,7 @@ import { createDatasetUploadRouter } from './routes/datasets.js';
 import { createDocumentRouter } from './routes/documents.js';
 import { createFeatureEngineeringRouter } from './routes/featureEngineering.js';
 import { registerHealthRoutes } from './routes/health.js';
+import modelRouter from './routes/models.js';
 import { createPreprocessingRouter } from './routes/preprocessing.js';
 import { registerProjectRoutes } from './routes/projects.js';
 import { createQueryRouter } from './routes/query.js';
@@ -49,6 +50,7 @@ export function createApp() {
   router.use(createAnswerRouter());
   router.use(createPreprocessingRouter());
   router.use(createFeatureEngineeringRouter());
+  router.use('/models', modelRouter);
   router.use('/execute', executionRouter);
 
   app.use('/api', router);
