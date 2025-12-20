@@ -97,6 +97,12 @@ export async function downloadDocument(documentId: string): Promise<Blob> {
   return response.blob();
 }
 
+export async function deleteDocument(documentId: string): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(`/documents/${documentId}`, {
+    method: 'DELETE'
+  });
+}
+
 export async function searchDocuments(
   projectId: string,
   query: string,

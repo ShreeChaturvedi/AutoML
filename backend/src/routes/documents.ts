@@ -1,4 +1,6 @@
 import { createReadStream, existsSync } from 'fs';
+import { rm } from 'fs/promises';
+import { dirname } from 'path';
 import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
@@ -181,6 +183,39 @@ export function createDocumentRouter() {
     } catch (error) {
       console.error('[documents] Failed to download document:', error);
       return res.status(500).json({ error: 'Failed to download document' });
+    }
+  });
+
+  router.delete('/documents/:documentId', async (req, res) => {
+    if (!hasDatabaseConfiguration()) {
+      return res.status(503).json({ error: 'Database is not configured for document deletion' });
+    }
+
+    const { documentId } = req.params;
+    const pool = getDbPool();
+
+    try {
+      const result = await pool.query(
+        `SELECT storage_path FROM documents WHERE document_id = $1`,
+        [documentId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      const storagePath = result.rows[0].storage_path as string | null;
+      await pool.query(`DELETE FROM documents WHERE document_id = $1`, [documentId]);
+
+      if (storagePath) {
+        const directory = dirname(storagePath);
+        await rm(directory, { recursive: true, force: true });
+      }
+
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('[documents] Failed to delete document:', error);
+      return res.status(500).json({ error: 'Failed to delete document' });
     }
   });
 

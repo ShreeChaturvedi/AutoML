@@ -12,7 +12,7 @@
 import { create } from 'zustand';
 import type { UploadedFile, DataPreview, QueryArtifact, QueryMode, FileMetadata } from '@/types/file';
 import { listDatasets, deleteDataset } from '@/lib/api/datasets';
-import { listDocuments } from '@/lib/api/documents';
+import { listDocuments, deleteDocument } from '@/lib/api/documents';
 import { getFileType } from '@/types/file';
 
 interface DataState {
@@ -153,6 +153,14 @@ export const useDataStore = create<DataState>((set, get) => ({
       } catch (error) {
         console.error('[dataStore] Failed to delete dataset from backend:', error);
         throw error; // Re-throw so UI can handle it
+      }
+    }
+    if (file.metadata?.documentId) {
+      try {
+        await deleteDocument(file.metadata.documentId);
+      } catch (error) {
+        console.error('[dataStore] Failed to delete document from backend:', error);
+        throw error;
       }
     }
 
@@ -411,6 +419,10 @@ export const useDataStore = create<DataState>((set, get) => ({
           metadata: {
             documentId: document.documentId,
             mimeType: document.mimeType,
+            parseWarning:
+              typeof document.metadata?.parseError === 'string'
+                ? document.metadata.parseError
+                : (document.metadata?.parseWarning as string | undefined),
             ...(document.metadata ?? {})
           }
         });
