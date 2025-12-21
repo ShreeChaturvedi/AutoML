@@ -7,6 +7,7 @@ import {
   listModels,
   trainModel
 } from '../services/modelTraining.js';
+import { generateModelPlan } from '../services/modelPlanner.js';
 
 const router = Router();
 
@@ -20,8 +21,34 @@ const trainSchema = z.object({
   name: z.string().optional()
 });
 
+const planSchema = z.object({
+  projectId: z.string().min(1),
+  datasetId: z.string().min(1),
+  targetColumn: z.string().optional(),
+  problemType: z.enum(['classification', 'regression', 'clustering', 'forecasting', 'unspecified']).optional()
+});
+
 router.get('/templates', (_req: Request, res: Response) => {
   res.json({ templates: getModelTemplates() });
+});
+
+router.post('/plan', async (req: Request, res: Response) => {
+  const parsed = planSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: 'Invalid request',
+      details: parsed.error.issues
+    });
+    return;
+  }
+
+  try {
+    const plan = await generateModelPlan(parsed.data);
+    res.json({ plan });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to generate model plan';
+    res.status(400).json({ error: message });
+  }
 });
 
 router.get('/', async (req: Request, res: Response) => {
