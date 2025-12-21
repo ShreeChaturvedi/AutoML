@@ -37,7 +37,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { downloadDocument } from '@/lib/api/documents';
-import { cn } from '@/lib/utils';
 import type { UploadedFile } from '@/types/file';
 import { formatFileSize } from '@/types/file';
 

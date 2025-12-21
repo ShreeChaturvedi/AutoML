@@ -53,7 +53,7 @@ export function UserProfile() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <div
-          className="flex items-center gap-3 px-2 py-2 rounded-md cursor-pointer hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring"
+          className="flex items-center gap-3 px-2 py-2 rounded-md cursor-pointer hover:bg-accent/50 focus:outline-none"
         >
           <Avatar className="h-8 w-8">
             <AvatarImage src={avatarUrl} alt={displayName} />

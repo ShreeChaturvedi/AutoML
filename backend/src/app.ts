@@ -11,6 +11,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { createDatasetUploadRouter } from './routes/datasets.js';
 import { createDocumentRouter } from './routes/documents.js';
 import { createFeatureEngineeringRouter } from './routes/featureEngineering.js';
+import { createLlmRouter } from './routes/llm.js';
 import { registerHealthRoutes } from './routes/health.js';
 import modelRouter from './routes/models.js';
 import { createPreprocessingRouter } from './routes/preprocessing.js';
@@ -50,6 +51,7 @@ export function createApp() {
   router.use(createAnswerRouter());
   router.use(createPreprocessingRouter());
   router.use(createFeatureEngineeringRouter());
+  router.use(createLlmRouter());
   router.use('/models', modelRouter);
   router.use('/execute', executionRouter);
 

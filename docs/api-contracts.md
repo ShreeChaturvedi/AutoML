@@ -201,6 +201,74 @@ interface ExecuteResponse {
 }
 ```
 
+---
+
+## `/api/llm/feature-plan/stream` (POST, NDJSON stream)
+
+**Request**
+
+```ts
+interface LlmPlanRequest {
+  projectId: string;
+  datasetId: string;
+  targetColumn?: string;
+  prompt?: string;
+  toolResults?: ToolResult[];
+  featureSummary?: string;
+}
+```
+
+**Response (application/x-ndjson)**
+
+```ts
+type LlmStreamEvent =
+  | { type: 'token'; text: string }
+  | { type: 'envelope'; envelope: LlmEnvelope }
+  | { type: 'error'; message: string }
+  | { type: 'done' };
+```
+
+---
+
+## `/api/llm/training/stream` (POST, NDJSON stream)
+
+Same request/response as `/api/llm/feature-plan/stream`, but the envelope `kind` is `training`.
+
+---
+
+## `/api/llm/tools/execute` (POST)
+
+**Request**
+
+```ts
+type ToolCall = {
+  id: string;
+  tool: 'list_project_files' | 'get_dataset_profile' | 'get_dataset_sample' | 'search_documents' | 'run_python';
+  args?: Record<string, unknown>;
+  rationale?: string;
+};
+
+interface ToolExecuteRequest {
+  projectId: string;
+  toolCalls: ToolCall[];
+}
+```
+
+**Response**
+
+```ts
+type ToolResult = {
+  id: string;
+  tool: ToolCall['tool'];
+  output?: unknown;
+  error?: string;
+};
+
+interface ToolExecuteResponse {
+  results: ToolResult[];
+}
+```
+
 Related endpoints:
 
 - `POST /api/execute/session`

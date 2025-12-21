@@ -13,7 +13,7 @@
 
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { PanelLeftClose, PanelLeftOpen, ChevronRight, FolderKanban } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -110,26 +110,13 @@ export function AppShell({ children }: AppShellProps) {
             {isProjectRoute && activeProject && unlockedPhases.length > 0 && (
               <Breadcrumb className="min-w-0">
                 <BreadcrumbList className="flex-wrap">
-                  <BreadcrumbItem>
-                    <BreadcrumbLink
-                      href={`/project/${activeProjectId}/${unlockedPhases[0]}`}
-                      className="text-sm hover:text-foreground max-w-[120px] truncate flex items-center gap-1"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        const firstPhase = unlockedPhases[0];
-                        handlePhaseClick(firstPhase);
-                      }}
-                    >
-                      <FolderKanban className="h-3.5 w-3.5 flex-shrink-0" />
-                      {activeProject.title}
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-
                   {/* Show all unlocked phases */}
-                  {unlockedPhases.map((phase) => [
-                    <BreadcrumbSeparator key={`sep-${phase}`}>
-                      <ChevronRight className="h-4 w-4" />
-                    </BreadcrumbSeparator>,
+                  {unlockedPhases.map((phase, index) => [
+                    index > 0 && (
+                      <BreadcrumbSeparator key={`sep-${phase}`}>
+                        <ChevronRight className="h-4 w-4" />
+                      </BreadcrumbSeparator>
+                    ),
                     <BreadcrumbItem key={phase}>
                       <BreadcrumbLink
                         href={`/project/${activeProject?.id}/${phase}`}

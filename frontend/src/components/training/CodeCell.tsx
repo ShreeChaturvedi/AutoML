@@ -372,7 +372,7 @@ export function CodeCell({
       {/* Output - compact toggle */}
       {richOutputs.length > 0 && (
         <div className="border-t">
-          <div className="flex min-h-[28px] items-center justify-between px-2 py-1.5">
+          <div className="flex min-h-[28px] items-center justify-between px-2 py-2">
             <button
               className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setShowOutput(!showOutput)}
@@ -384,7 +384,7 @@ export function CodeCell({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="h-6 w-6 p-1"
+                className="h-7 w-7 p-1.5"
                 onClick={async () => {
                   const text = richOutputs.map(o => o.content).join('\n');
                   await navigator.clipboard.writeText(text);
@@ -397,7 +397,7 @@ export function CodeCell({
           </div>
 
           {showOutput && (
-            <div className="px-3 pb-2 pt-2 text-xs font-mono">
+            <div className="px-3 pb-2 text-xs font-mono">
               <CellOutputRenderer outputs={richOutputs} />
             </div>
           )}

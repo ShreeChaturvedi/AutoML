@@ -456,9 +456,8 @@ function resolvePackageAlias(input: string): {
         return { resolvedName: '', normalizedName: '', aliasNotice: '' };
     }
     const firstToken = trimmed.split(/[,\s]/)[0] ?? trimmed;
-    const match = /^([A-Za-z0-9._-]+)(.*)$/.exec(firstToken);
+    const match = /^([A-Za-z0-9._-]+)/.exec(firstToken);
     const base = match?.[1] ?? firstToken;
-    const suffix = match?.[2] ?? '';
     const normalizedBase = base.trim().toLowerCase().replace(/_/g, '-');
     const alias = PACKAGE_ALIASES.get(normalizedBase);
     if (!alias) {

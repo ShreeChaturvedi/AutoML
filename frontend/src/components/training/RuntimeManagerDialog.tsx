@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -23,7 +22,6 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useExecutionStore } from '@/stores/executionStore';
 import { useDataStore } from '@/stores/dataStore';
@@ -119,10 +117,39 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
     [projectFiles]
   );
 
+  const maxContentHeight = useMemo(() => {
+    if (typeof window === 'undefined') return 520;
+    return Math.min(520, Math.floor(window.innerHeight * 0.7));
+  }, []);
+
   useEffect(() => {
-    if (!open) return;
-    void refreshPackages();
-  }, [open, refreshPackages]);
+    if (!open || contentHeight !== null) return;
+
+    let active = true;
+    let frame = 0;
+    const hydrate = async () => {
+      try {
+        await refreshPackages();
+      } finally {
+        if (!active) return;
+        frame = window.requestAnimationFrame(() => {
+          const node = packagesContentRef.current;
+          if (!node) return;
+          const height = node.scrollHeight;
+          if (!height) return;
+          setContentHeight(Math.min(height, maxContentHeight));
+        });
+      }
+    };
+
+    void hydrate();
+    return () => {
+      active = false;
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [open, refreshPackages, contentHeight, maxContentHeight]);
 
   useEffect(() => {
     if (!open) {
@@ -138,34 +165,6 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
     }
   }, [open]);
 
-  const maxContentHeight = useMemo(() => {
-    if (typeof window === 'undefined') return 520;
-    return Math.min(520, Math.floor(window.innerHeight * 0.7));
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open || contentHeight !== null) return;
-    const node = packagesContentRef.current;
-    if (!node) return;
-
-    const measure = () => {
-      const height = node.scrollHeight;
-      if (!height) return;
-      setContentHeight(Math.min(height, maxContentHeight));
-    };
-
-    const frame = window.requestAnimationFrame(measure);
-    return () => window.cancelAnimationFrame(frame);
-  }, [
-    open,
-    contentHeight,
-    maxContentHeight,
-    installedPackages.length,
-    selectedPackage?.name,
-    installProgress,
-    installMessage,
-    mode
-  ]);
 
   useEffect(() => {
     if (!open || !suggestionsOpen) return;
@@ -357,7 +356,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
           <Settings2 className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[70vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Runtime Manager</DialogTitle>
           <DialogDescription>
@@ -365,7 +364,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="runtime" className="w-full">
+        <Tabs defaultValue="runtime" className="flex w-full flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="runtime">Runtime</TabsTrigger>
             <TabsTrigger value="packages">Packages</TabsTrigger>
@@ -377,7 +376,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
               value="runtime"
               forceMount
               style={contentHeight ? { height: contentHeight } : undefined}
-              className="flex min-h-0 flex-col gap-4 data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
+              className="flex min-h-0 flex-col gap-4 overflow-hidden data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
             >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium">
@@ -398,13 +397,13 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
               </div>
             </div>
 
-            <div className="rounded-md border bg-muted/20 px-3 py-2">
+            <div className="rounded-md border bg-muted/20 px-3 py-1.5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-muted-foreground">Version</span>
                   {mode === 'cloud' ? (
                     <Select value={pythonVersion} onValueChange={setPythonVersion}>
-                      <SelectTrigger className="h-7 w-[96px] text-xs">
+                      <SelectTrigger className="h-7 w-[84px] text-xs">
                         <SelectValue placeholder="Version" />
                       </SelectTrigger>
                       <SelectContent>
@@ -433,13 +432,13 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
               </div>
             </div>
 
-            <div className="mt-auto rounded-md border border-dashed p-3 text-xs text-muted-foreground space-y-2">
+            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground space-y-2">
               <div className="flex items-center gap-2">
                 <Info className="h-3.5 w-3.5" />
                 <span>
                   {mode === 'cloud'
                     ? sessionId
-                      ? `Cloud session ${sessionId.slice(0, 8)}… caches packages and data for faster runs.`
+                      ? 'Cloud session keeps packages and data cached for faster runs.'
                       : 'Cloud runtime will create a session on first run.'
                     : 'Browser runtime keeps packages in-memory for this tab only.'}
                 </span>
@@ -460,7 +459,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
               forceMount
               ref={packagesContentRef}
               style={contentHeight ? { height: contentHeight } : undefined}
-              className="flex min-h-0 flex-col gap-4 data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
+              className="flex min-h-0 flex-col gap-4 overflow-hidden data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
             >
             <div className="space-y-3 min-h-0">
               <div className="flex flex-wrap items-start gap-2">
@@ -695,7 +694,7 @@ export function RuntimeManagerDialog({ projectId }: RuntimeManagerDialogProps) {
               value="datasets"
               forceMount
               style={contentHeight ? { height: contentHeight } : undefined}
-              className="flex min-h-0 flex-col gap-4 data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
+              className="flex min-h-0 flex-col gap-4 overflow-hidden data-[state=inactive]:absolute data-[state=inactive]:left-0 data-[state=inactive]:top-0 data-[state=inactive]:w-full data-[state=inactive]:opacity-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:block"
             >
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="text-xs">

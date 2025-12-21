@@ -88,5 +88,14 @@ export const env = {
   // Google OAuth
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-  googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:5173/auth/google/callback'
+  googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:5173/auth/google/callback',
+
+  // LLM Providers
+  llmProvider: process.env.LLM_PROVIDER ?? 'gemini',
+  llmApiKey: process.env.LLM_API_KEY ?? '',
+  llmBaseUrl: process.env.LLM_BASE_URL ?? '',
+  llmModel: process.env.LLM_MODEL ?? 'gemini-1.5-flash',
+  geminiApiKey: process.env.GEMINI_API_KEY ?? '',
+  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-1.5-flash',
+  llmTimeoutMs: parseInteger(process.env.LLM_TIMEOUT_MS, 60000)
 };

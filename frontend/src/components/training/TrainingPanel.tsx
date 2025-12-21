@@ -12,7 +12,9 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -38,33 +40,34 @@ import {
   Wand2,
   Paperclip,
   Brain,
-  ArrowUp
+  ArrowUp,
+  Square
 } from 'lucide-react';
 import { CodeCell } from './CodeCell';
-import { ModelPlanPanel } from './ModelPlanPanel';
 import { RuntimeToggle } from './RuntimeToggle';
 import { RuntimeManagerDialog } from './RuntimeManagerDialog';
 import type { Cell } from '@/types/cell';
 import type { ModelTemplate } from '@/types/model';
-import { getAnswer, uploadDocument } from '@/lib/api/documents';
+import { uploadDocument } from '@/lib/api/documents';
 import { downloadDataset } from '@/lib/api/datasets';
+import { executeToolCalls, streamTrainingPlan } from '@/lib/api/llm';
 import { cn } from '@/lib/utils';
 import { useExecutionStore } from '@/stores/executionStore';
 import { useDataStore } from '@/stores/dataStore';
 import { useFeatureStore } from '@/stores/featureStore';
 import { generateFeatureEngineeringCode } from '@/lib/features/codeGenerator';
 import { getFileType, type UploadedFile } from '@/types/file';
+import type { ToolCall, ToolResult, UiItem, UiSchema } from '@/types/llmUi';
+import { LlmToolPanel } from '@/components/llm/LlmToolPanel';
+import { useToolApproval } from '@/hooks/useToolApproval';
+import { generateModelTrainingCode } from '@/lib/training/modelCode';
 
 const ASSISTANT_MODELS = [
-  { value: 'auto', label: 'Auto (RAG)' },
-  { value: 'llama-3.1-8b', label: 'Llama 3.1 8B' },
-  { value: 'phi-3-mini', label: 'Phi-3 Mini' }
+  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' }
 ];
 
 const REASONING_MODES = [
-  { value: 'fast', label: 'Fast' },
-  { value: 'balanced', label: 'Balanced' },
-  { value: 'deep', label: 'Deep' }
+  { value: 'auto', label: 'Auto' }
 ];
 
 export function TrainingPanel() {
@@ -74,16 +77,28 @@ export function TrainingPanel() {
   const [cells, setCells] = useState<Cell[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [assistantModel, setAssistantModel] = useState(ASSISTANT_MODELS[0].value);
-  const [assistantReasoning, setAssistantReasoning] = useState(REASONING_MODES[1].value);
+  const [assistantReasoning, setAssistantReasoning] = useState(REASONING_MODES[0].value);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [mountedDatasets, setMountedDatasets] = useState<Set<string>>(new Set());
   const [mountingDatasets, setMountingDatasets] = useState(false);
   const [attachmentStatus, setAttachmentStatus] = useState<'idle' | 'uploading' | 'error' | 'success'>('idle');
   const [attachmentMessage, setAttachmentMessage] = useState<string | null>(null);
+  const [trainingPrompt, setTrainingPrompt] = useState('');
+  const [trainingText, setTrainingText] = useState('');
+  const [trainingUi, setTrainingUi] = useState<UiSchema | null>(null);
+  const [trainingToolCalls, setTrainingToolCalls] = useState<ToolCall[]>([]);
+  const [trainingToolResults, setTrainingToolResults] = useState<ToolResult[]>([]);
+  const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [isTrainingGenerating, setIsTrainingGenerating] = useState(false);
+  const [isTrainingToolsRunning, setIsTrainingToolsRunning] = useState(false);
+  const [trainingDatasetId, setTrainingDatasetId] = useState<string | null>(null);
+  const [trainingTargetColumn, setTrainingTargetColumn] = useState<string | undefined>();
+  const { approved: toolsApproved, approve: approveTools } = useToolApproval();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const trainingAbortRef = useRef<AbortController | null>(null);
 
   // Execution store
   const {
@@ -116,9 +131,24 @@ export function TrainingPanel() {
     () => projectFiles.filter((file) => file.metadata?.datasetId),
     [projectFiles]
   );
+  const trainingDatasetOptions = useMemo(
+    () =>
+      datasetFiles
+        .map((file) => ({
+          datasetId: file.metadata?.datasetId,
+          name: file.name,
+          columns: file.metadata?.columns ?? []
+        }))
+        .filter((file): file is { datasetId: string; name: string; columns: string[] } => Boolean(file.datasetId)),
+    [datasetFiles]
+  );
   const datasetCompletionFiles = useMemo(
     () => datasetFiles.map((file) => file.name),
     [datasetFiles]
+  );
+  const selectedTrainingFile = useMemo(
+    () => datasetFiles.find((file) => file.metadata?.datasetId === trainingDatasetId),
+    [datasetFiles, trainingDatasetId]
   );
   const documentFiles = useMemo(
     () => projectFiles.filter((file) => file.metadata?.documentId),
@@ -142,6 +172,20 @@ export function TrainingPanel() {
     if (!projectId) return;
     hydrateFromBackend(projectId);
   }, [projectId, hydrateFromBackend]);
+
+  useEffect(() => {
+    if (!trainingDatasetId && trainingDatasetOptions.length > 0) {
+      setTrainingDatasetId(trainingDatasetOptions[0].datasetId);
+    }
+  }, [trainingDatasetId, trainingDatasetOptions]);
+
+  useEffect(() => {
+    const selected = trainingDatasetOptions.find((dataset) => dataset.datasetId === trainingDatasetId);
+    if (!selected) return;
+    if (!trainingTargetColumn || !selected.columns.includes(trainingTargetColumn)) {
+      setTrainingTargetColumn(selected.columns[0]);
+    }
+  }, [trainingDatasetOptions, trainingDatasetId, trainingTargetColumn]);
 
   // Initialize Pyodide on mount if in browser mode
   useEffect(() => {
@@ -193,7 +237,7 @@ export function TrainingPanel() {
         try {
           console.log(`[TrainingPanel] Mounting dataset: ${file.name}`);
           const content = await downloadDataset(datasetId);
-          await mountDatasetFile(file.name, content, datasetId);
+          await mountDatasetFile(file.name, content);
           newMounted.add(datasetId);
           console.log(`[TrainingPanel] Mounted: ${file.name}`);
         } catch (error) {
@@ -260,26 +304,218 @@ export function TrainingPanel() {
     addCodeCell(code);
   }, [projectFeatures, datasetFiles, addCodeCell]);
 
-  // Add a chat cell (AI response)
-  const addChatCell = useCallback((content: string) => {
-    const newCell: Cell = {
-      id: generateCellId(),
-      type: 'chat',
-      content,
-      status: 'success',
-      createdAt: new Date().toISOString()
-    };
-    setCells(prev => [...prev, newCell]);
+  const buildFeatureSummary = useCallback(() => {
+    if (projectFeatures.length === 0) return undefined;
+    const names = projectFeatures.slice(0, 6).map((feature) => feature.featureName);
+    const suffix = projectFeatures.length > 6 ? ` +${projectFeatures.length - 6} more` : '';
+    return `${projectFeatures.length} enabled features: ${names.join(', ')}${suffix}`;
+  }, [projectFeatures]);
+
+  const handleGenerateTrainingPlan = useCallback(async (promptOverride?: string, toolResultsOverride?: ToolResult[]) => {
+    if (!projectId || !selectedTrainingFile?.metadata?.datasetId) return;
+
+    trainingAbortRef.current?.abort();
+    const controller = new AbortController();
+    trainingAbortRef.current = controller;
+
+    const promptValue = (promptOverride ?? trainingPrompt).trim();
+
+    setTrainingText('');
+    setTrainingError(null);
+    setTrainingUi(null);
+    setTrainingToolCalls([]);
+    setTrainingToolResults(toolResultsOverride ?? []);
+    setIsTrainingGenerating(true);
+
+    try {
+      await streamTrainingPlan(
+        {
+          projectId,
+          datasetId: selectedTrainingFile.metadata.datasetId,
+          targetColumn: trainingTargetColumn,
+          prompt: promptValue || undefined,
+          toolResults: toolResultsOverride?.length ? toolResultsOverride : undefined,
+          featureSummary: buildFeatureSummary()
+        },
+        (event) => {
+          if (event.type === 'token') {
+            setTrainingText((prev) => prev + event.text);
+          }
+          if (event.type === 'envelope') {
+            if (event.envelope.tool_calls?.length) {
+              setTrainingToolCalls(event.envelope.tool_calls);
+              setTrainingUi(null);
+            } else {
+              setTrainingUi(event.envelope.ui ?? null);
+              setTrainingToolCalls([]);
+            }
+          }
+          if (event.type === 'error') {
+            setTrainingError(event.message);
+          }
+          if (event.type === 'done') {
+            setIsTrainingGenerating(false);
+          }
+        },
+        controller.signal
+      );
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') return;
+      setTrainingError(error instanceof Error ? error.message : 'Failed to generate training plan.');
+      setIsTrainingGenerating(false);
+    }
+  }, [projectId, selectedTrainingFile, trainingTargetColumn, trainingPrompt, buildFeatureSummary]);
+
+  const handleRunTrainingTools = useCallback(async () => {
+    if (!trainingToolCalls.length || !projectId) return;
+    setIsTrainingToolsRunning(true);
+    try {
+      const response = await executeToolCalls(projectId, trainingToolCalls);
+      setTrainingToolResults(response.results);
+      await handleGenerateTrainingPlan(trainingPrompt, response.results);
+    } catch (error) {
+      setTrainingError(error instanceof Error ? error.message : 'Failed to execute tools.');
+    } finally {
+      setIsTrainingToolsRunning(false);
+    }
+  }, [projectId, trainingToolCalls, handleGenerateTrainingPlan, trainingPrompt]);
+
+  const handleStopTraining = useCallback(() => {
+    trainingAbortRef.current?.abort();
+    setIsTrainingGenerating(false);
   }, []);
 
-  const handleInsertModelCode = useCallback((code: string, template: ModelTemplate) => {
+  const buildTemplateFromDraft = useCallback((item: Extract<UiItem, { type: 'model_recommendation' }>): ModelTemplate => {
+    const params = item.template.parameters.reduce<Record<string, unknown>>((acc, param) => {
+      acc[param.key] = param.default;
+      return acc;
+    }, {});
+    return {
+      id: `llm_${item.id}`,
+      name: item.template.name,
+      taskType: item.template.taskType,
+      description: item.rationale,
+      library: item.template.library,
+      importPath: item.template.importPath,
+      modelClass: item.template.modelClass,
+      parameters: item.template.parameters,
+      defaultParams: params,
+      metrics: item.template.metrics
+    };
+  }, []);
+
+  const handleInsertRecommendation = useCallback((item: Extract<UiItem, { type: 'model_recommendation' }>) => {
+    if (!selectedTrainingFile?.metadata?.datasetId) return;
+    const template = buildTemplateFromDraft(item);
+    const code = generateModelTrainingCode({
+      template,
+      datasetFilename: selectedTrainingFile.name,
+      datasetId: selectedTrainingFile.metadata.datasetId,
+      targetColumn: template.taskType === 'clustering' ? undefined : trainingTargetColumn,
+      parameters: item.parameters
+    });
     setSelectedModel(template);
     addCodeCell(code);
-  }, [addCodeCell]);
+  }, [addCodeCell, buildTemplateFromDraft, selectedTrainingFile, trainingTargetColumn]);
 
-  const handleSelectTemplate = useCallback((template: ModelTemplate | null) => {
-    setSelectedModel(template);
-  }, []);
+  const renderTrainingItem = (item: UiItem) => {
+    switch (item.type) {
+      case 'dataset_summary':
+        return (
+          <Card key={item.datasetId} className="border-muted/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Dataset snapshot</CardTitle>
+            </CardHeader>
+            <CardContent className="text-xs text-muted-foreground space-y-2">
+              <div className="flex items-center justify-between">
+                <span>{item.filename}</span>
+                <Badge variant="outline" className="text-[10px]">{item.rows} rows</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>{item.columns} columns</span>
+                <Badge variant="secondary" className="text-[10px]">{item.datasetId.slice(0, 8)}</Badge>
+              </div>
+              {item.notes?.length ? (
+                <ul className="space-y-1">
+                  {item.notes.map((note) => (
+                    <li key={note}>• {note}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </CardContent>
+          </Card>
+        );
+      case 'model_recommendation':
+        return (
+          <Card key={item.id} className="border">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{item.template.name}</p>
+                  <p className="text-xs text-muted-foreground">{item.rationale}</p>
+                </div>
+                <Badge variant="outline" className="text-[10px]">{item.template.library}</Badge>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {item.template.metrics.map((metric) => (
+                  <Badge key={metric} variant="secondary" className="text-[10px]">{metric}</Badge>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => handleInsertRecommendation(item)}
+              >
+                Insert training cell
+              </Button>
+            </CardContent>
+          </Card>
+        );
+      case 'code_cell':
+        return (
+          <Card key={item.id} className="border-muted/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">{item.title ?? 'Code cell'}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <pre className="text-xs rounded-md bg-muted p-3 overflow-x-auto">
+                {item.content}
+              </pre>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => addCodeCell(item.content)}
+              >
+                Insert cell
+              </Button>
+            </CardContent>
+          </Card>
+        );
+      case 'callout':
+        return (
+          <div
+            key={item.text}
+            className={cn(
+              'rounded-md border px-3 py-2 text-xs',
+              item.tone === 'warning' && 'border-amber-500/40 text-amber-600',
+              item.tone === 'success' && 'border-emerald-500/40 text-emerald-600'
+            )}
+          >
+            {item.text}
+          </div>
+        );
+      case 'action':
+        return (
+          <Button key={item.id} variant="outline" size="sm">
+            {item.label}
+          </Button>
+        );
+      default:
+        return null;
+    }
+  };
 
   // Handle cell content change
   const handleCellContentChange = useCallback((cellId: string, content: string) => {
@@ -380,56 +616,20 @@ export function TrainingPanel() {
     }
   }, [projectId, addFile, setFileMetadata]);
 
-  // Handle AI chat submission
   const handleChatSubmit = useCallback(async () => {
     if (!chatInput.trim() || !projectId || isAiThinking) return;
-
-    const userMessage = chatInput;
-    const modelLabel = ASSISTANT_MODELS.find((model) => model.value === assistantModel)?.label ?? assistantModel;
-    const reasoningLabel = REASONING_MODES.find((mode) => mode.value === assistantReasoning)?.label ?? assistantReasoning;
+    const userMessage = chatInput.trim();
     setChatInput('');
+    setTrainingPrompt(userMessage);
     setIsAiThinking(true);
 
-    // Add user message as a cell
-    const userCell: Cell = {
-      id: generateCellId(),
-      type: 'chat',
-      content: `**You:**\nModel: ${modelLabel} · Reasoning: ${reasoningLabel}\n${userMessage}`,
-      status: 'success',
-      createdAt: new Date().toISOString()
-    };
-    setCells(prev => [...prev, userCell]);
-
     try {
-      // Call the RAG API
-      const response = await getAnswer(projectId, userMessage);
-
-      if (response.answer.status === 'ok') {
-        const aiResponse = response.answer.answer;
-        const citations = response.answer.citations;
-
-        // Format response with citations
-        let formattedResponse = `**AI Assistant:**\n\n${aiResponse}`;
-
-        if (citations.length > 0) {
-          formattedResponse += '\n\n---\n*Sources:*\n';
-          citations.forEach((citation, idx) => {
-            formattedResponse += `\n${idx + 1}. ${citation.filename} (span ${citation.span.start}-${citation.span.end})`;
-          });
-        }
-
-        addChatCell(formattedResponse);
-      } else {
-        addChatCell('**AI Assistant:**\n\nI couldn\'t find relevant information in your documents. Try uploading relevant documentation or rephrasing your question.');
-      }
-    } catch (error) {
-      console.error('AI chat failed:', error);
-      addChatCell('**AI Assistant:**\n\nSorry, I encountered an error. Please try again.');
+      await handleGenerateTrainingPlan(userMessage);
     } finally {
       setIsAiThinking(false);
       textareaRef.current?.focus();
     }
-  }, [chatInput, projectId, assistantModel, assistantReasoning, addChatCell, isAiThinking]);
+  }, [chatInput, projectId, isAiThinking, handleGenerateTrainingPlan]);
 
   const handleChatKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -514,16 +714,140 @@ export function TrainingPanel() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-6 space-y-4">
-              {/* Model plan */}
+              {/* Training plan */}
               {projectId && (
-                <div className="mb-6">
-                  <ModelPlanPanel
-                    projectId={projectId}
-                    datasetFiles={datasetFiles}
-                    onInsertCode={handleInsertModelCode}
-                    onSelectTemplate={handleSelectTemplate}
-                  />
-                </div>
+                <Card className="border-muted/40">
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-sm">Training plan</CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          LLM-generated plan with model recommendations and code cells.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px]">
+                          {trainingDatasetOptions.length} dataset{trainingDatasetOptions.length === 1 ? '' : 's'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,220px)_minmax(0,220px)_minmax(0,1fr)_auto]">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Dataset</Label>
+                        <Select
+                          value={trainingDatasetId ?? ''}
+                          onValueChange={setTrainingDatasetId}
+                          disabled={trainingDatasetOptions.length === 0}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Select dataset" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {trainingDatasetOptions.map((dataset) => (
+                              <SelectItem key={dataset.datasetId} value={dataset.datasetId}>
+                                {dataset.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Target</Label>
+                        <Select
+                          value={trainingTargetColumn ?? ''}
+                          onValueChange={setTrainingTargetColumn}
+                          disabled={!trainingDatasetOptions.length}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Select target" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {trainingDatasetOptions
+                              .find((dataset) => dataset.datasetId === trainingDatasetId)
+                              ?.columns.map((column) => (
+                                <SelectItem key={column} value={column}>
+                                  {column}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Goal</Label>
+                        <Input
+                          value={trainingPrompt}
+                          onChange={(event) => setTrainingPrompt(event.target.value)}
+                          placeholder="What do you want to optimize?"
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => handleGenerateTrainingPlan()}
+                          disabled={!trainingDatasetId || isTrainingGenerating}
+                        >
+                          {isTrainingGenerating ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                          Generate
+                        </Button>
+                        {isTrainingGenerating && (
+                          <Button variant="ghost" size="sm" onClick={handleStopTraining}>
+                            Stop
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {trainingText && (
+                      <div className="rounded-md border border-muted/40 bg-muted/20 p-3 text-sm text-muted-foreground whitespace-pre-wrap">
+                        {trainingText.trim()}
+                      </div>
+                    )}
+
+                    {trainingError && (
+                      <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                        {trainingError}
+                      </div>
+                    )}
+
+                    <LlmToolPanel
+                      toolCalls={trainingToolCalls}
+                      results={trainingToolResults}
+                      isRunning={isTrainingToolsRunning}
+                      approvalGranted={toolsApproved}
+                      onApprove={approveTools}
+                      onRun={handleRunTrainingTools}
+                    />
+
+                    {trainingUi && (
+                      <div className="space-y-3">
+                        {trainingUi.sections.map((section) => (
+                          <div key={section.id} className="space-y-3">
+                            {section.title && <p className="text-sm font-semibold">{section.title}</p>}
+                            <div
+                              className={cn(
+                                section.layout === 'grid' && 'grid gap-3',
+                                section.layout === 'grid' && section.columns === 2 && 'md:grid-cols-2',
+                                section.layout === 'grid' && section.columns === 3 && 'md:grid-cols-3',
+                                (!section.layout || section.layout === 'column') && 'space-y-3'
+                              )}
+                            >
+                              {section.items.map(renderTrainingItem)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* Cells */}
@@ -595,7 +919,7 @@ export function TrainingPanel() {
                 />
                 <InputGroupAddon align="block-end">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Select value={assistantModel} onValueChange={setAssistantModel}>
+                    <Select value={assistantModel} onValueChange={setAssistantModel} disabled>
                       <SelectTrigger className="h-7 w-[120px] text-xs">
                         <SelectValue placeholder="Model" />
                       </SelectTrigger>
@@ -607,7 +931,7 @@ export function TrainingPanel() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select value={assistantReasoning} onValueChange={setAssistantReasoning}>
+                    <Select value={assistantReasoning} onValueChange={setAssistantReasoning} disabled>
                       <SelectTrigger className="h-7 w-[130px] text-xs">
                         <SelectValue placeholder="Reasoning" />
                       </SelectTrigger>
@@ -644,12 +968,12 @@ export function TrainingPanel() {
                     </Button>
                     <InputGroupButton
                       size="sm"
-                      onClick={handleChatSubmit}
-                      disabled={!chatInput.trim() || isAiThinking}
+                      onClick={isAiThinking ? handleStopTraining : handleChatSubmit}
+                      disabled={!chatInput.trim() && !isAiThinking}
                       variant="ghost"
-                      className="h-9 w-9 rounded-full border border-foreground/20 bg-transparent p-0 text-foreground hover:bg-foreground/10 focus-visible:ring-foreground/30"
+                      className="h-9 w-9 rounded-full border border-foreground/30 bg-foreground p-0 text-background hover:bg-foreground/90 disabled:bg-muted/30 disabled:text-muted-foreground"
                     >
-                      <ArrowUp className="h-4 w-4" />
+                      {isAiThinking ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
                     </InputGroupButton>
                   </div>
                 </InputGroupAddon>
