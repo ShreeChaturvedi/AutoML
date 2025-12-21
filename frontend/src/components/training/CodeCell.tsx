@@ -26,7 +26,7 @@ import {
   ArrowUp,
   CornerDownLeft
 } from 'lucide-react';
-import type { Cell } from '@/types/training';
+import type { Cell } from '@/types/cell';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/theme-provider';
 import { CellOutputRenderer } from './CellOutputRenderer';

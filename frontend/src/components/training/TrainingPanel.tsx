@@ -34,7 +34,6 @@ import {
   Sparkles,
   Code,
   Loader2,
-  BookOpen,
   Database,
   Wand2,
   Paperclip,
@@ -42,10 +41,11 @@ import {
   ArrowUp
 } from 'lucide-react';
 import { CodeCell } from './CodeCell';
-import { ModelSelector } from './ModelSelector';
+import { ModelPlanPanel } from './ModelPlanPanel';
 import { RuntimeToggle } from './RuntimeToggle';
 import { RuntimeManagerDialog } from './RuntimeManagerDialog';
-import type { Cell, ModelTemplate } from '@/types/training';
+import type { Cell } from '@/types/cell';
+import type { ModelTemplate } from '@/types/model';
 import { getAnswer, uploadDocument } from '@/lib/api/documents';
 import { downloadDataset } from '@/lib/api/datasets';
 import { cn } from '@/lib/utils';
@@ -76,7 +76,6 @@ export function TrainingPanel() {
   const [assistantModel, setAssistantModel] = useState(ASSISTANT_MODELS[0].value);
   const [assistantReasoning, setAssistantReasoning] = useState(REASONING_MODES[1].value);
   const [isAiThinking, setIsAiThinking] = useState(false);
-  const [showModelSelector, setShowModelSelector] = useState(true);
   const [mountedDatasets, setMountedDatasets] = useState<Set<string>>(new Set());
   const [mountingDatasets, setMountingDatasets] = useState(false);
   const [attachmentStatus, setAttachmentStatus] = useState<'idle' | 'uploading' | 'error' | 'success'>('idle');
@@ -108,6 +107,7 @@ export function TrainingPanel() {
   const files = useDataStore((s) => s.files);
   const addFile = useDataStore((s) => s.addFile);
   const setFileMetadata = useDataStore((s) => s.setFileMetadata);
+  const hydrateFromBackend = useDataStore((s) => s.hydrateFromBackend);
   const projectFiles = useMemo(() =>
     projectId ? files.filter(f => f.projectId === projectId) : [],
     [files, projectId]
@@ -117,10 +117,7 @@ export function TrainingPanel() {
     [projectFiles]
   );
   const datasetCompletionFiles = useMemo(
-    () => datasetFiles.map((file) => ({
-      name: file.name,
-      datasetId: file.metadata?.datasetId
-    })),
+    () => datasetFiles.map((file) => file.name),
     [datasetFiles]
   );
   const documentFiles = useMemo(
@@ -140,6 +137,11 @@ export function TrainingPanel() {
     if (!projectId) return;
     hydrateFeatures(projectId);
   }, [projectId, hydrateFeatures]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    hydrateFromBackend(projectId);
+  }, [projectId, hydrateFromBackend]);
 
   // Initialize Pyodide on mount if in browser mode
   useEffect(() => {
@@ -270,22 +272,14 @@ export function TrainingPanel() {
     setCells(prev => [...prev, newCell]);
   }, []);
 
-  // Handle model selection
-  const handleSelectModel = useCallback((model: ModelTemplate) => {
-    setSelectedModel(model);
-    setShowModelSelector(false);
-
-    // Generate code from template
-    let code = model.codeTemplate;
-
-    // Replace template placeholders with default values
-    for (const [key, config] of Object.entries(model.defaultParams)) {
-      code = code.replace(new RegExp(`{{${key}}}`, 'g'), String(config.default));
-    }
-
-    // Add the generated code as a new cell
+  const handleInsertModelCode = useCallback((code: string, template: ModelTemplate) => {
+    setSelectedModel(template);
     addCodeCell(code);
   }, [addCodeCell]);
+
+  const handleSelectTemplate = useCallback((template: ModelTemplate | null) => {
+    setSelectedModel(template);
+  }, []);
 
   // Handle cell content change
   const handleCellContentChange = useCallback((cellId: string, content: string) => {
@@ -520,36 +514,30 @@ export function TrainingPanel() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-6 space-y-4">
-              {/* Model Selector */}
-              {showModelSelector && (
+              {/* Model plan */}
+              {projectId && (
                 <div className="mb-6">
-                  <ModelSelector
-                    selectedModelId={selectedModel?.id}
-                    onSelectModel={handleSelectModel}
+                  <ModelPlanPanel
+                    projectId={projectId}
+                    datasetFiles={datasetFiles}
+                    onInsertCode={handleInsertModelCode}
+                    onSelectTemplate={handleSelectTemplate}
                   />
                 </div>
               )}
 
               {/* Cells */}
-              {cells.length === 0 && !showModelSelector ? (
+              {cells.length === 0 ? (
                 <Card className="border-dashed">
                   <CardContent className="py-12 text-center">
                     <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium">Ready to Train</h3>
+                    <h3 className="text-lg font-medium">Notebook is empty</h3>
                     <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-                      Select a model above or add a code cell to start training.
-                      Ask the AI assistant for help with your training code.
+                      Insert a training cell from the model plan above, or add a blank cell to start.
                     </p>
                     <div className="flex justify-center gap-2 mt-4">
                       <Button
                         variant="outline"
-                        size="sm"
-                        onClick={() => setShowModelSelector(true)}
-                      >
-                        <BookOpen className="h-4 w-4 mr-2" />
-                        Choose Model
-                      </Button>
-                      <Button
                         size="sm"
                         onClick={() => addCodeCell()}
                       >

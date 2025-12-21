@@ -154,12 +154,25 @@ class OutputCapture:
 
 _capture = OutputCapture()
 
-def resolve_dataset_path(filename):
+def resolve_dataset_path(filename, dataset_id=None):
     """Resolve dataset path across cloud and browser mounts."""
-    candidates = [
+    candidates = []
+
+    if dataset_id:
+        suffix = ''.join([c for c in str(dataset_id) if c.isalnum()])[:8]
+        if suffix:
+            stem = Path(filename).stem
+            ext = Path(filename).suffix
+            alias = f"{stem}__{suffix}{ext}"
+            candidates.extend([
+                Path('/workspace/datasets') / alias,
+                Path('/datasets') / alias
+            ])
+
+    candidates.extend([
         Path('/workspace/datasets') / filename,
         Path('/datasets') / filename
-    ]
+    ])
     for candidate in candidates:
         if candidate.exists():
             return str(candidate)

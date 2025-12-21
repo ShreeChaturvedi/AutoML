@@ -23,7 +23,10 @@ export interface ModelTemplate {
   taskType: ModelTaskType;
   description: string;
   library: string;
+  importPath: string;
+  modelClass: string;
   parameters: ModelTemplateParam[];
+  defaultParams: Record<string, unknown>;
   metrics: string[];
 }
 
