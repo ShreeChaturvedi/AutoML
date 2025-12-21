@@ -8,15 +8,15 @@
 
   <rect width="900" height="240" rx="24" fill="url(#bg)"/>
 
-  <circle cx="820" cy="40" r="90" fill="#94a3b8" opacity="0.12"/>
-  <circle cx="780" cy="200" r="120" fill="#9ca3af" opacity="0.1"/>
-  <circle cx="120" cy="200" r="70" fill="#cbd5e1" opacity="0.12"/>
+  <circle cx="820" cy="40" r="90" fill="#9ca3af" opacity="0.12"/>
+  <circle cx="780" cy="200" r="120" fill="#d1d5db" opacity="0.12"/>
+  <circle cx="120" cy="200" r="70" fill="#e5e7eb" opacity="0.14"/>
 
-  <g transform="translate(70 54) scale(2.4)" fill="none" stroke="#334155">
+  <g transform="translate(70 54) scale(2.4)" fill="none" stroke="#4b5563">
     <path d="M4 24C4 24 8 20 16 20C24 20 28 24 28 24" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
     <path d="M7 18C7 18 10 14 16 14C22 14 25 18 25 18" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
     <path d="M10 12C10 12 12 9 16 9C20 9 22 12 22 12" stroke-width="2.5" stroke-linecap="round"/>
-    <circle cx="16" cy="5" r="2.5" fill="#334155" stroke="none"/>
+    <circle cx="16" cy="5" r="2.5" fill="#4b5563" stroke="none"/>
     <path d="M13 9L15 6" stroke-width="2" stroke-linecap="round"/>
     <path d="M19 9L17 6" stroke-width="2" stroke-linecap="round"/>
   </g>
@@ -27,7 +27,7 @@
     .subline { font: 400 16px "Space Grotesk", "IBM Plex Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
   </style>
 
-  <text x="170" y="96" class="title" fill="#0f172a">AutoML</text>
-  <text x="170" y="132" class="tagline" fill="#334155">Automated Data Scientist platform</text>
-  <text x="170" y="158" class="subline" fill="#475569">LLM + RAG + MCP with HPO + SFT for production ML</text>
+  <text x="170" y="96" class="title" fill="#111827">AutoML</text>
+  <text x="170" y="132" class="tagline" fill="#4b5563">Automated Data Scientist platform</text>
+  <text x="170" y="158" class="subline" fill="#6b7280">LLM + RAG + MCP with HPO + SFT for production ML</text>
 </svg>
