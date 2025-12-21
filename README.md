@@ -1,72 +1,51 @@
-# AI-Augmented AutoML Toolchain
+<p align="center">
+  <img src="docs/branding/readme-light.svg#gh-light-mode-only" width="800" alt="AutoML">
+  <img src="docs/branding/readme-dark.svg#gh-dark-mode-only" width="800" alt="AutoML">
+</p>
 
-AI-augmented AutoML workspace built as a TypeScript monorepo with a React frontend, Express API, and Playwright benchmarks. The focus is a guided, control-panel workflow for data scientists: upload data, explore with SQL, get preprocessing/feature suggestions, and iterate toward training.
+---
 
-## What Works Today
+[![ci](https://github.com/ShreeChaturvedi/AutoML/actions/workflows/ci.yml/badge.svg)](https://github.com/ShreeChaturvedi/AutoML/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![node](https://img.shields.io/badge/node-22-LTS-brightgreen.svg)](https://nodejs.org/)
+[![typescript](https://img.shields.io/badge/typescript-5-blue.svg)](https://www.typescriptlang.org/)
 
-- Project CRUD with workflow phase navigation (frontend + backend file store).
-- Dataset upload for CSV/JSON/XLSX, basic profiling, and Postgres table loading.
-- Data Explorer with SQL editor (Monaco), query execution, caching, and EDA summaries.
-- Preprocessing analysis + suggestion cards driven by backend heuristics.
-- Feature engineering UI + backend apply pipeline that generates derived datasets.
-- Document ingestion (PDF/Markdown/TXT), chunking, lightweight embeddings, and search.
-- RAG-style answering using retrieved snippets (no LLM yet).
-- Training code execution via Pyodide (browser) and Docker runtime (cloud) with package management.
-- Model training API (template-based sklearn runners) with a file-backed registry.
-- Playwright benchmark flow and a simple NL→SQL/RAG eval runner.
-- Auth flows (login/signup/reset/profile) backed by JWT + refresh tokens when Postgres is configured.
+AutoML is an automated data scientist platform that turns datasets and domain documents into deployed, monitored ML services. It fuses LLM context (retrieval-augmented generation, RAG, plus Model Context Protocol, MCP) with automated training (hyperparameter optimization, HPO, multi-model search, and supervised fine-tuning, SFT) to deliver domain-tuned models through transparent, editable pipelines.
 
-## In Progress / Known Gaps
+## What It Does
 
-- NL→SQL is template-based (not LLM-driven); English mode needs richer parsing.
-- Cloud execution requires the Docker runtime image to be available or auto-built.
-- Auth is wired, but end-to-end validation still requires Postgres + SMTP config.
-- DuckDB client exists but is currently unused (backend Postgres is the active query engine).
+AutoML is designed for expert workflows where the hard part is not training a model, but making the model correct for a specific domain and keeping it correct over time. The platform ingests structured data and business context, builds domain-aware features, runs automated model selection and tuning, and ships production-ready endpoints with evaluation and monitoring baked in.
 
-## System Requirements
+## Engineering Highlights
 
-- Node.js 22 LTS
-- npm 10+
-- Postgres 16+ (required for auth, query, documents, answers, preprocessing)
-- Docker Desktop (recommended for the one-command `npm run dev` flow)
+- LLM-guided orchestration using MCP to produce structured, auditable pipeline decisions instead of opaque text outputs.
+- RAG-driven feature engineering and query interpretation grounded in uploaded domain documents.
+- Hybrid training stack: reliable templates for core algorithms plus LLM-generated preprocessing that stays user-editable.
+- Automated HPO for model selection and SFT workflows for domain-tuned small LLMs.
+- Containerized execution runtime with resource caps, artifact capture, and reproducible runs.
+- Built-in evaluation harness for NL-to-SQL and RAG quality checks alongside E2E UI benchmarks.
+
+## Workflow
+
+1. Ingest datasets and domain documents into a project workspace.
+2. Explore data with SQL/NL queries and automated profiling.
+3. Generate domain-aware features and run automated training + HPO.
+4. Deploy monitored endpoints and track model quality over time.
+
+## Tech Stack
+
+TypeScript monorepo with a React SPA frontend, Express API, Postgres-backed metadata, Dockerized execution runtime, and Playwright-based benchmarking.
 
 ## Quick Start
 
-Install workspace dependencies:
-
 ```bash
 npm run install:all
-```
-
-Run the full stack (auto-starts a Docker Postgres container named `automl-postgres-5433` on `localhost:5433`, writes `backend/.env` if missing, and applies migrations):
-
-```bash
 npm run dev
 ```
 
-If you already run Postgres elsewhere, update `backend/.env` with your own `DATABASE_URL` and rerun `npm run dev`.
+The `npm run dev` flow boots a local Postgres container, applies migrations, and starts the frontend + backend.
 
-Optional commands:
-
-```bash
-npm --prefix backend run dev      # backend only
-npm --prefix frontend run dev:ui  # frontend only
-npm run dev:backend              # backend only (root shortcut)
-npm run dev:ui                   # frontend only (root shortcut)
-npm --prefix backend run benchmark:api  # API latency/throughput benchmark
-npm run benchmark                # Playwright benchmark
-npm run eval                     # NL→SQL + RAG eval (requires backend)
-```
-
-## Documentation
-
-- `ARCHITECTURE.md` — system topology, data flow, and storage layout
-- `PROGRESS.md` — verified feature status and known gaps
-- `DECISIONS.md` — ADR-style architectural decisions
-- `docs/api-contracts.md` — request/response contracts for key endpoints
-- `docs/design-system.md` — frontend layout, typography, and color guidelines
-
-## Repository Structure
+## Repository Layout
 
 ```
 backend/   Express + TypeScript API
@@ -74,6 +53,14 @@ frontend/  Vite + React UI
 testing/   Playwright benchmark + eval runner
 ```
 
+## Documentation
+
+- `ARCHITECTURE.md` -- system topology and data flow
+- `PROGRESS.md` -- verified feature status and known gaps
+- `DECISIONS.md` -- architectural decision records
+- `docs/api-contracts.md` -- request/response contracts
+- `docs/design-system.md` -- UI guidelines
+
 ## License
 
-TBD (internal project).
+GPL-3.0 -- see `LICENSE`.
