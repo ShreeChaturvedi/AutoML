@@ -7,7 +7,7 @@
 
 [![ci](https://github.com/ShreeChaturvedi/AutoML/actions/workflows/ci.yml/badge.svg)](https://github.com/ShreeChaturvedi/AutoML/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
-[![node](https://img.shields.io/badge/node-22-LTS-brightgreen.svg)](https://nodejs.org/)
+[![node](https://img.shields.io/badge/node-22%20LTS-brightgreen.svg)](https://nodejs.org/)
 [![typescript](https://img.shields.io/badge/typescript-5-blue.svg)](https://www.typescriptlang.org/)
 
 AutoML is an automated data scientist platform that turns datasets and domain documents into deployed, monitored ML services. It fuses LLM context (retrieval-augmented generation, RAG, plus Model Context Protocol, MCP) with automated training (hyperparameter optimization, HPO, multi-model search, and supervised fine-tuning, SFT) to deliver domain-tuned models through transparent, editable pipelines.
