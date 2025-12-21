@@ -263,15 +263,15 @@ class PgProjectRepository implements ProjectRepository {
   async list(): Promise<Project[]> {
     const pool = getDbPool();
     const result = await pool.query(
-      `SELECT project_id, name, description, metadata, created_at, updated_at FROM ${this.table} ORDER BY created_at ASC`
+      `SELECT project_id, name, description, icon, color, metadata, created_at, updated_at FROM ${this.table} ORDER BY created_at ASC`
     );
 
     return result.rows.map((row) => ({
       id: row.project_id,
       name: row.name,
       description: row.description ?? undefined,
-      icon: undefined,
-      color: undefined,
+      icon: row.icon ?? 'Folder',
+      color: row.color ?? 'blue',
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
       metadata: sanitizeMetadata(row.metadata ?? undefined)
@@ -281,7 +281,7 @@ class PgProjectRepository implements ProjectRepository {
   async getById(id: string): Promise<Project | undefined> {
     const pool = getDbPool();
     const result = await pool.query(
-      `SELECT project_id, name, description, metadata, created_at, updated_at FROM ${this.table} WHERE project_id = $1`,
+      `SELECT project_id, name, description, icon, color, metadata, created_at, updated_at FROM ${this.table} WHERE project_id = $1`,
       [id]
     );
     if (result.rowCount === 0) {
@@ -292,8 +292,8 @@ class PgProjectRepository implements ProjectRepository {
       id: row.project_id,
       name: row.name,
       description: row.description ?? undefined,
-      icon: undefined,
-      color: undefined,
+      icon: row.icon ?? 'Folder',
+      color: row.color ?? 'blue',
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
       metadata: sanitizeMetadata(row.metadata ?? undefined)
@@ -306,10 +306,10 @@ class PgProjectRepository implements ProjectRepository {
     const metadata = sanitizeMetadata(input.metadata);
 
     const result = await pool.query(
-      `INSERT INTO ${this.table} (project_id, name, description, metadata)
-       VALUES ($1, $2, $3, $4)
-       RETURNING project_id, name, description, metadata, created_at, updated_at`,
-      [id, input.name, input.description ?? null, metadata ?? {}]
+      `INSERT INTO ${this.table} (project_id, name, description, icon, color, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING project_id, name, description, icon, color, metadata, created_at, updated_at`,
+      [id, input.name, input.description ?? null, input.icon ?? 'Folder', input.color ?? 'blue', metadata ?? {}]
     );
 
     const row = result.rows[0];
@@ -317,8 +317,8 @@ class PgProjectRepository implements ProjectRepository {
       id: row.project_id,
       name: row.name,
       description: row.description ?? undefined,
-      icon: undefined,
-      color: undefined,
+      icon: row.icon ?? 'Folder',
+      color: row.color ?? 'blue',
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
       metadata: sanitizeMetadata(row.metadata ?? undefined)
@@ -341,11 +341,13 @@ class PgProjectRepository implements ProjectRepository {
       `UPDATE ${this.table}
        SET name = COALESCE($2, name),
            description = COALESCE($3, description),
-           metadata = $4,
+           icon = COALESCE($4, icon),
+           color = COALESCE($5, color),
+           metadata = $6,
            updated_at = NOW()
        WHERE project_id = $1
-       RETURNING project_id, name, description, metadata, created_at, updated_at`,
-      [id, input.name ?? null, input.description ?? null, mergedMetadata ?? {}]
+       RETURNING project_id, name, description, icon, color, metadata, created_at, updated_at`,
+      [id, input.name ?? null, input.description ?? null, input.icon ?? null, input.color ?? null, mergedMetadata ?? {}]
     );
 
     if (result.rowCount === 0) {
@@ -357,8 +359,8 @@ class PgProjectRepository implements ProjectRepository {
       id: row.project_id,
       name: row.name,
       description: row.description ?? undefined,
-      icon: undefined,
-      color: undefined,
+      icon: row.icon ?? 'Folder',
+      color: row.color ?? 'blue',
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
       metadata: sanitizeMetadata(row.metadata ?? undefined)

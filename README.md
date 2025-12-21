@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="docs/branding/readme-light.svg?v=3#gh-light-mode-only" width="800" alt="AutoML">
-  <img src="docs/branding/readme-dark.svg?v=3#gh-dark-mode-only" width="800" alt="AutoML">
+  <img src="docs/branding/readme-light.svg?v=4#gh-light-mode-only" width="800" alt="AutoML">
+  <img src="docs/branding/readme-dark.svg?v=4#gh-dark-mode-only" width="800" alt="AutoML">
 </p>
 
 ---

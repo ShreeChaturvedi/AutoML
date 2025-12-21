@@ -29,6 +29,23 @@ export function LlmToolPanel({
   onApprove,
   onRun
 }: LlmToolPanelProps) {
+  const formatJson = (value: unknown) => {
+    let text = '';
+    if (typeof value === 'string') {
+      text = value;
+    } else {
+      try {
+        text = JSON.stringify(value, null, 2);
+      } catch {
+        text = String(value);
+      }
+    }
+    if (text.length > 2000) {
+      return `${text.slice(0, 2000)}…`;
+    }
+    return text;
+  };
+
   const toolStates = useMemo<ToolCallState[]>(() => {
     return toolCalls.map((call) => {
       const result = results.find((item) => item.id === call.id);
@@ -95,6 +112,26 @@ export function LlmToolPanel({
             </div>
             {call.rationale && <p className="mt-1 text-[11px] text-muted-foreground">{call.rationale}</p>}
             {result?.error && <p className="mt-1 text-[11px]">{result.error}</p>}
+            {(call.args || result?.output) && (
+              <div className="mt-2 space-y-2 text-[11px] text-muted-foreground">
+                {call.args && (
+                  <details>
+                    <summary className="cursor-pointer font-medium text-foreground/80">Args</summary>
+                    <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted/50 p-2 text-[10px] text-muted-foreground">
+                      {formatJson(call.args)}
+                    </pre>
+                  </details>
+                )}
+                {result?.output && (
+                  <details>
+                    <summary className="cursor-pointer font-medium text-foreground/80">Output</summary>
+                    <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-muted/50 p-2 text-[10px] text-muted-foreground">
+                      {formatJson(result.output)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

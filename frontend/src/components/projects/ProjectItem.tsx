@@ -109,7 +109,7 @@ export function ProjectItem({ project }: ProjectItemProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onClick={(e: React.MouseEvent) => {
+              onClick={(e) => {
                 e.stopPropagation();
                 setIsEditDialogOpen(true);
               }}
@@ -118,7 +118,7 @@ export function ProjectItem({ project }: ProjectItemProps) {
               Edit
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={(e: React.MouseEvent) => {
+              onClick={(e) => {
                 e.stopPropagation();
                 void handleDelete();
               }}

@@ -2,6 +2,7 @@ import type { DatasetProfile } from '../../types/dataset.js';
 import type { FeatureMethod } from '../featureEngineering.js';
 import type { LlmRequest } from './llmClient.js';
 import type { ToolResult } from '../../types/llm.js';
+import { buildToolDescriptionText } from './toolRegistry.js';
 
 const JSON_START = '<<<JSON>>>';
 const JSON_END = '<<<END>>>';
@@ -12,11 +13,7 @@ export function getJsonMarkers() {
 
 const TOOL_DESCRIPTIONS = `
 Tools you can request (only when you must):
-- list_project_files(): list datasets/documents for the project.
-- get_dataset_profile({ datasetId }): returns columns, dtypes, stats, sample.
-- get_dataset_sample({ datasetId }): returns sample rows.
-- search_documents({ query, limit? }): returns top document chunks relevant to query.
-- run_python({ code, pythonVersion?, timeoutMs? }): executes code in cloud runtime.
+${buildToolDescriptionText()}
 `.trim();
 
 const UI_SCHEMA = `
@@ -64,6 +61,7 @@ Output format (STRICT - follow exactly):
 5) Do not output anything after ${JSON_END}.
 
 CRITICAL: Do NOT use markdown code blocks (\`\`\`json). Use ONLY ${JSON_START} and ${JSON_END} as delimiters.
+CRITICAL: Never output any backticks in the assistant text.
 
 Envelope JSON schema (MUST follow this exactly):
 {
@@ -95,6 +93,8 @@ function buildSystemPrompt() {
   return [
     'You are an AutoML workflow designer.',
     'Generate deterministic-looking UI plans driven by data context.',
+    'When you lack information, request tool calls instead of guessing.',
+    'Include only the UI items you need and order them by impact.',
     TOOL_DESCRIPTIONS,
     UI_SCHEMA,
     OUTPUT_RULES
@@ -127,7 +127,7 @@ export function buildFeatureEngineeringRequest(params: {
       ? `Tool results:\n${JSON.stringify(toolResults, null, 2)}`
       : 'Tool results: (none)',
     `Supported feature methods: ${featureMethods.join(', ')}.`,
-    'Return UI that lets users enable/disable suggestions, tune controls, and insert code cells.'
+    'Select only relevant UI items. Use code_cell only when runnable code is essential.'
   ].join('\n');
 
   return {
@@ -166,7 +166,7 @@ export function buildTrainingRequest(params: {
     toolResults?.length
       ? `Tool results:\n${JSON.stringify(toolResults, null, 2)}`
       : 'Tool results: (none)',
-    'Return UI with model recommendations, parameters, and code cells where needed.'
+    'Select only relevant UI items. Use code_cell only when runnable code is essential.'
   ].join('\n');
 
   return {

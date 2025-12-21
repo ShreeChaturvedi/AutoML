@@ -269,6 +269,22 @@ interface ToolExecuteResponse {
 }
 ```
 
+## `/api/llm/tools` (GET)
+
+**Response**
+
+```ts
+interface LlmToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+interface LlmToolsResponse {
+  tools: LlmToolDefinition[];
+}
+```
+
 Related endpoints:
 
 - `POST /api/execute/session`

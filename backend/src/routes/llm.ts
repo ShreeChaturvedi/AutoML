@@ -9,6 +9,7 @@ import { FEATURE_METHODS } from '../services/featureEngineering.js';
 import { createLlmClient, type LlmClient, type LlmRequest } from '../services/llm/llmClient.js';
 import { buildFeatureEngineeringRequest, buildTrainingRequest, getJsonMarkers } from '../services/llm/prompts.js';
 import { executeToolCall } from '../services/llm/tools.js';
+import { LLM_TOOL_DEFINITIONS } from '../services/llm/toolRegistry.js';
 import { LlmEnvelopeSchema, ToolCallSchema } from '../types/llm.js';
 
 const datasetRepository = createDatasetRepository(env.datasetMetadataPath);
@@ -47,6 +48,10 @@ export function createLlmRouter() {
     const { projectId, toolCalls } = parsed.data;
     const results = await Promise.all(toolCalls.map((call) => executeToolCall(projectId, call)));
     return res.json({ results });
+  });
+
+  router.get('/llm/tools', (_req, res) => {
+    return res.json({ tools: LLM_TOOL_DEFINITIONS });
   });
 
   router.post('/llm/feature-plan/stream', async (req, res) => {

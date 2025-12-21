@@ -70,6 +70,9 @@ const REASONING_MODES = [
   { value: 'auto', label: 'Auto' }
 ];
 
+const stripJsonFence = (text: string) =>
+  text.replace(/```(?:json)?/g, '').replace(/```/g, '').trim();
+
 export function TrainingPanel() {
   const { projectId } = useParams<{ projectId: string }>();
 
@@ -93,12 +96,14 @@ export function TrainingPanel() {
   const [isTrainingToolsRunning, setIsTrainingToolsRunning] = useState(false);
   const [trainingDatasetId, setTrainingDatasetId] = useState<string | null>(null);
   const [trainingTargetColumn, setTrainingTargetColumn] = useState<string | undefined>();
+  const cleanedTrainingText = useMemo(() => stripJsonFence(trainingText), [trainingText]);
   const { approved: toolsApproved, approve: approveTools } = useToolApproval();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const trainingAbortRef = useRef<AbortController | null>(null);
+  const autoRunIdsRef = useRef(new Set<string>());
 
   // Execution store
   const {
@@ -155,6 +160,26 @@ export function TrainingPanel() {
     [projectFiles]
   );
 
+  const llmCodeCells = useMemo(() => {
+    if (!trainingUi) return [];
+    return trainingUi.sections.flatMap((section) =>
+      section.items.flatMap((item) =>
+        item.type === 'code_cell'
+          ? [{
+              id: item.id,
+              content: item.content,
+              autoRun: item.autoRun ?? false,
+              title: item.title
+            }]
+          : []
+      )
+    );
+  }, [trainingUi]);
+  const manualCells = useMemo(
+    () => cells.filter((cell) => !cell.id.startsWith('llm-')),
+    [cells]
+  );
+
   // Get feature specs for this project
   const features = useFeatureStore((s) => s.features);
   const hydrateFeatures = useFeatureStore((s) => s.hydrateFromProject);
@@ -186,6 +211,30 @@ export function TrainingPanel() {
       setTrainingTargetColumn(selected.columns[0]);
     }
   }, [trainingDatasetOptions, trainingDatasetId, trainingTargetColumn]);
+
+  useEffect(() => {
+    if (llmCodeCells.length === 0) return;
+    setCells((prev) => {
+      const manualCells = prev.filter((cell) => !cell.id.startsWith('llm-'));
+      const existingMap = new Map(prev.map((cell) => [cell.id, cell]));
+      const nextLlmCells = llmCodeCells.map((item) => {
+        const id = `llm-${item.id}`;
+        const existing = existingMap.get(id);
+        if (existing) {
+          if (existing.content === item.content) return existing;
+          return { ...existing, content: item.content };
+        }
+        return {
+          id,
+          type: 'code',
+          content: item.content,
+          status: 'idle',
+          createdAt: new Date().toISOString()
+        };
+      });
+      return [...manualCells, ...nextLlmCells];
+    });
+  }, [llmCodeCells]);
 
   // Initialize Pyodide on mount if in browser mode
   useEffect(() => {
@@ -473,26 +522,26 @@ export function TrainingPanel() {
           </Card>
         );
       case 'code_cell':
-        return (
-          <Card key={item.id} className="border-muted/40">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{item.title ?? 'Code cell'}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <pre className="text-xs rounded-md bg-muted p-3 overflow-x-auto">
-                {item.content}
-              </pre>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => addCodeCell(item.content)}
-              >
-                Insert cell
-              </Button>
-            </CardContent>
-          </Card>
-        );
+        {
+          const cellId = `llm-${item.id}`;
+          const cell = cells.find((entry) => entry.id === cellId);
+          if (!cell) return null;
+          const cellNumber = Math.max(1, cells.findIndex((entry) => entry.id === cellId) + 1);
+          return (
+            <div key={item.id} className="space-y-2">
+              {item.title && <p className="text-xs font-medium text-muted-foreground">{item.title}</p>}
+              <CodeCell
+                cell={cell}
+                cellNumber={cellNumber}
+                onRun={cell.type === 'code' ? () => handleRunCell(cell.id) : undefined}
+                onDelete={() => handleDeleteCell(cell.id)}
+                onContentChange={cell.type === 'code' ? (content) => handleCellContentChange(cell.id, content) : undefined}
+                isRunning={cell.status === 'running'}
+                datasetFiles={datasetCompletionFiles}
+              />
+            </div>
+          );
+        }
       case 'callout':
         return (
           <div
@@ -577,6 +626,19 @@ export function TrainingPanel() {
       ));
     }
   }, [cells, projectId, executeWithStore]);
+
+  useEffect(() => {
+    if (llmCodeCells.length === 0) return;
+    llmCodeCells.forEach((item) => {
+      if (!item.autoRun) return;
+      const cellId = `llm-${item.id}`;
+      if (autoRunIdsRef.current.has(cellId)) return;
+      const cell = cells.find((entry) => entry.id === cellId);
+      if (!cell || cell.status !== 'idle') return;
+      autoRunIdsRef.current.add(cellId);
+      void handleRunCell(cellId);
+    });
+  }, [cells, handleRunCell, llmCodeCells]);
 
   const handleAttachFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -806,9 +868,9 @@ export function TrainingPanel() {
                       </div>
                     </div>
 
-                    {trainingText && (
+                    {cleanedTrainingText && (
                       <div className="rounded-md border border-muted/40 bg-muted/20 p-3 text-sm text-muted-foreground whitespace-pre-wrap">
-                        {trainingText.trim()}
+                        {cleanedTrainingText}
                       </div>
                     )}
 
@@ -846,46 +908,38 @@ export function TrainingPanel() {
                         ))}
                       </div>
                     )}
-                  </CardContent>
-                </Card>
-              )}
 
-              {/* Cells */}
-              {cells.length === 0 ? (
-                <Card className="border-dashed">
-                  <CardContent className="py-12 text-center">
-                    <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium">Notebook is empty</h3>
-                    <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-                      Insert a training cell from the model plan above, or add a blank cell to start.
-                    </p>
-                    <div className="flex justify-center gap-2 mt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => addCodeCell()}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Cell
-                      </Button>
+                    <div className="pt-2 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-muted-foreground">Notebook</p>
+                        <Button variant="ghost" size="sm" onClick={() => addCodeCell()}>
+                          <Plus className="h-3.5 w-3.5" />
+                          Add cell
+                        </Button>
+                      </div>
+                      {manualCells.length === 0 ? (
+                        <div className="rounded-md border border-dashed p-4 text-xs text-muted-foreground">
+                          Add a code cell to start exploring the dataset or run custom training steps.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {manualCells.map((cell, index) => (
+                            <CodeCell
+                              key={cell.id}
+                              cell={cell}
+                              cellNumber={index + 1}
+                              onRun={cell.type === 'code' ? () => handleRunCell(cell.id) : undefined}
+                              onDelete={() => handleDeleteCell(cell.id)}
+                              onContentChange={cell.type === 'code' ? (content) => handleCellContentChange(cell.id, content) : undefined}
+                              isRunning={cell.status === 'running'}
+                              datasetFiles={datasetCompletionFiles}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
-              ) : (
-                <div className="space-y-4">
-                  {cells.map((cell, index) => (
-                    <CodeCell
-                      key={cell.id}
-                      cell={cell}
-                      cellNumber={index + 1}
-                      onRun={cell.type === 'code' ? () => handleRunCell(cell.id) : undefined}
-                      onDelete={() => handleDeleteCell(cell.id)}
-                      onContentChange={cell.type === 'code' ? (content) => handleCellContentChange(cell.id, content) : undefined}
-                      isRunning={cell.status === 'running'}
-                      datasetFiles={datasetCompletionFiles}
-                    />
-                  ))}
-                </div>
               )}
 
               {/* AI thinking indicator */}

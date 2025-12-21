@@ -36,6 +36,9 @@ const methodCategoryMap = new Map<FeatureMethod, FeatureCategory>(
   FEATURE_TEMPLATES.map((template) => [template.method, template.category])
 );
 
+const stripJsonFence = (text: string) =>
+  text.replace(/```(?:json)?/g, '').replace(/```/g, '').trim();
+
 export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelProps) {
   const allFiles = useDataStore((state) => state.files);
   const hydrateFromBackend = useDataStore((state) => state.hydrateFromBackend);
@@ -75,6 +78,7 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRunningTools, setIsRunningTools] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestionState[]>([]);
+  const cleanedAssistantText = useMemo(() => stripJsonFence(assistantText), [assistantText]);
 
   const [applyStatus, setApplyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
@@ -619,13 +623,13 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
       <div className="flex-1 flex flex-col overflow-hidden">
         <ScrollArea className="flex-1">
           <div className="p-6 space-y-4">
-            {assistantText && (
+            {cleanedAssistantText && (
               <Card className="border-muted/40">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">AI Notes</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {assistantText.trim()}
+                  {cleanedAssistantText}
                 </CardContent>
               </Card>
             )}
@@ -667,7 +671,7 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
                 ))}
               </div>
             ) : (
-              !assistantText && (
+              !cleanedAssistantText && (
                 <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
                   Generate an AI plan to see feature ideas and controls.
                 </div>
