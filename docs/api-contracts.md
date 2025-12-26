@@ -213,6 +213,7 @@ interface LlmPlanRequest {
   datasetId: string;
   targetColumn?: string;
   prompt?: string;
+  toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   featureSummary?: string;
 }
@@ -227,6 +228,11 @@ type LlmStreamEvent =
   | { type: 'error'; message: string }
   | { type: 'done' };
 ```
+
+Notes:
+- The assistant streams text via `token` events.
+- UI payloads are delivered via an internal `render_ui` tool call and surface as `envelope.ui`.
+- Tool calls are surfaced via `envelope.tool_calls` for explicit user approval and execution.
 
 ---
 
@@ -294,6 +300,19 @@ Related endpoints:
 - `GET /api/execute/packages/:sessionId`
 - `GET /api/execute/runtimes`
 - `GET /api/execute/health`
+
+---
+
+## `/api/mcp` (POST, MCP Streamable HTTP)
+
+MCP endpoint exposing project-scoped tools via Streamable HTTP.
+
+- Method: `POST /api/mcp`
+- Transport: MCP Streamable HTTP (JSON-RPC over HTTP + SSE)
+- Tools: `list_project_files`, `get_dataset_profile`, `get_dataset_sample`, `search_documents`, `run_python`
+- Each tool requires a `projectId` in its input schema.
+
+`GET` and `DELETE` return 405 with a JSON-RPC error payload.
 
 ---
 

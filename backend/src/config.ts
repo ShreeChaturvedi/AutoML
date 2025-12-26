@@ -62,8 +62,7 @@ export const env = {
   executionMaxMemoryMb: parseInteger(process.env.EXECUTION_MAX_MEMORY_MB, 2048),
   executionMaxCpuPercent: parseInteger(process.env.EXECUTION_MAX_CPU_PERCENT, 100),
   executionTmpfsMb: parseInteger(process.env.EXECUTION_TMPFS_MB, 1024),
-  executionDockerPlatform: process.env.EXECUTION_DOCKER_PLATFORM
-    ?? (process.arch === 'arm64' ? 'linux/amd64' : ''),
+  executionDockerPlatform: process.env.EXECUTION_DOCKER_PLATFORM ?? '',
   dockerEnabled: process.env.DOCKER_ENABLED !== 'false',
   dockerImage: process.env.DOCKER_IMAGE ?? 'automl-python-runtime:latest',
   executionNetwork: process.env.EXECUTION_NETWORK ?? 'bridge',
@@ -96,6 +95,16 @@ export const env = {
   llmBaseUrl: process.env.LLM_BASE_URL ?? '',
   llmModel: process.env.LLM_MODEL ?? 'gemini-1.5-flash',
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
-  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-1.5-flash',
-  llmTimeoutMs: parseInteger(process.env.LLM_TIMEOUT_MS, 60000)
+  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview',
+  geminiThinkingModel: process.env.GEMINI_THINKING_MODEL ?? 'gemini-3-flash-preview',
+  llmTimeoutMs: parseInteger(process.env.LLM_TIMEOUT_MS, 60000),
+
+  // Notebook System
+  notebookOutputDir: process.env.NOTEBOOK_OUTPUT_DIR ?? 'storage/outputs',
+  notebookOutputMaxSize: parseInteger(process.env.NOTEBOOK_OUTPUT_MAX_SIZE, 10 * 1024), // 10KB threshold
+  notebookLockTimeoutMs: parseInteger(process.env.NOTEBOOK_LOCK_TIMEOUT_MS, 60000), // 1 minute auto-release
+
+  // WebSocket
+  wsHeartbeatMs: parseInteger(process.env.WS_HEARTBEAT_MS, 30000),
+  wsReconnectMaxAttempts: parseInteger(process.env.WS_RECONNECT_MAX_ATTEMPTS, 5)
 };

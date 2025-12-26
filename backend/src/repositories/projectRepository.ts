@@ -259,11 +259,39 @@ export function createProjectRepository(storagePath: string): ProjectRepository 
 
 class PgProjectRepository implements ProjectRepository {
   private readonly table = 'projects';
+  private columnCache: Promise<Set<string>> | null = null;
+
+  private async getColumns(): Promise<Set<string>> {
+    if (!this.columnCache) {
+      this.columnCache = (async () => {
+        const pool = getDbPool();
+        const result = await pool.query(
+          `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+          [this.table]
+        );
+        return new Set(result.rows.map((row) => String(row.column_name)));
+      })();
+    }
+    return this.columnCache;
+  }
+
+  private buildSelectColumns(columns: Set<string>) {
+    const select = ['project_id', 'name', 'description', 'metadata', 'created_at', 'updated_at'];
+    if (columns.has('icon')) {
+      select.push('icon');
+    }
+    if (columns.has('color')) {
+      select.push('color');
+    }
+    return select;
+  }
 
   async list(): Promise<Project[]> {
     const pool = getDbPool();
+    const columns = await this.getColumns();
+    const selectColumns = this.buildSelectColumns(columns);
     const result = await pool.query(
-      `SELECT project_id, name, description, icon, color, metadata, created_at, updated_at FROM ${this.table} ORDER BY created_at ASC`
+      `SELECT ${selectColumns.join(', ')} FROM ${this.table} ORDER BY created_at ASC`
     );
 
     return result.rows.map((row) => ({
@@ -280,8 +308,10 @@ class PgProjectRepository implements ProjectRepository {
 
   async getById(id: string): Promise<Project | undefined> {
     const pool = getDbPool();
+    const columns = await this.getColumns();
+    const selectColumns = this.buildSelectColumns(columns);
     const result = await pool.query(
-      `SELECT project_id, name, description, icon, color, metadata, created_at, updated_at FROM ${this.table} WHERE project_id = $1`,
+      `SELECT ${selectColumns.join(', ')} FROM ${this.table} WHERE project_id = $1`,
       [id]
     );
     if (result.rowCount === 0) {
@@ -304,12 +334,24 @@ class PgProjectRepository implements ProjectRepository {
     const pool = getDbPool();
     const id = randomUUID();
     const metadata = sanitizeMetadata(input.metadata);
+    const columns = await this.getColumns();
+
+    const insertColumns = ['project_id', 'name', 'description', 'metadata'];
+    const values: unknown[] = [id, input.name, input.description ?? null, metadata ?? {}];
+    if (columns.has('icon')) {
+      insertColumns.push('icon');
+      values.push(input.icon ?? 'Folder');
+    }
+    if (columns.has('color')) {
+      insertColumns.push('color');
+      values.push(input.color ?? 'blue');
+    }
 
     const result = await pool.query(
-      `INSERT INTO ${this.table} (project_id, name, description, icon, color, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING project_id, name, description, icon, color, metadata, created_at, updated_at`,
-      [id, input.name, input.description ?? null, input.icon ?? 'Folder', input.color ?? 'blue', metadata ?? {}]
+      `INSERT INTO ${this.table} (${insertColumns.join(', ')})
+       VALUES (${insertColumns.map((_, index) => `$${index + 1}`).join(', ')})
+       RETURNING ${this.buildSelectColumns(columns).join(', ')}`,
+      values
     );
 
     const row = result.rows[0];
@@ -336,18 +378,38 @@ class PgProjectRepository implements ProjectRepository {
       ...(existing.metadata ?? {}),
       ...(input.metadata ?? {})
     });
+    const columns = await this.getColumns();
+
+    const updates: string[] = [];
+    const values: unknown[] = [id];
+    let index = 2;
+
+    updates.push(`name = COALESCE($${index++}, name)`);
+    values.push(input.name ?? null);
+
+    updates.push(`description = COALESCE($${index++}, description)`);
+    values.push(input.description ?? null);
+
+    if (columns.has('icon')) {
+      updates.push(`icon = COALESCE($${index++}, icon)`);
+      values.push(input.icon ?? null);
+    }
+
+    if (columns.has('color')) {
+      updates.push(`color = COALESCE($${index++}, color)`);
+      values.push(input.color ?? null);
+    }
+
+    updates.push(`metadata = $${index++}`);
+    values.push(mergedMetadata ?? {});
 
     const result = await pool.query(
       `UPDATE ${this.table}
-       SET name = COALESCE($2, name),
-           description = COALESCE($3, description),
-           icon = COALESCE($4, icon),
-           color = COALESCE($5, color),
-           metadata = $6,
+       SET ${updates.join(', ')},
            updated_at = NOW()
        WHERE project_id = $1
-       RETURNING project_id, name, description, icon, color, metadata, created_at, updated_at`,
-      [id, input.name ?? null, input.description ?? null, input.icon ?? null, input.color ?? null, mergedMetadata ?? {}]
+       RETURNING ${this.buildSelectColumns(columns).join(', ')}`,
+      values
     );
 
     if (result.rowCount === 0) {
