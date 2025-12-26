@@ -62,25 +62,31 @@ export async function loadDatasetIntoPostgres(params: {
   }
 }
 
-export function sanitizeTableName(filename: string, datasetId: string): string {
+export function sanitizeTableName(filename: string, datasetId: string, forceUnique = false): string {
   // Remove extension and sanitize to create clean, user-friendly table name
   const baseName = filename.replace(/\.[^/.]+$/, '');
   let sanitized = baseName
     .replace(/[^a-zA-Z0-9_]/g, '_') // Replace invalid chars with underscore
     .replace(/^[^a-zA-Z]/, 'table_') // Ensure starts with letter
+    .replace(/_+/g, '_') // Collapse multiple underscores
+    .replace(/_$/, '') // Remove trailing underscore
     .toLowerCase();
 
   if (!sanitized) {
     sanitized = 'table_data';
   }
 
-  const suffix = datasetId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
-  const separator = suffix ? `_${suffix}` : '';
-  const maxBaseLength = 63 - separator.length;
-  const trimmed = sanitized.slice(0, maxBaseLength);
+  // Only add suffix if forceUnique is requested (for collision handling)
+  if (forceUnique) {
+    const suffix = datasetId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    const separator = suffix ? `_${suffix}` : '';
+    const maxBaseLength = 63 - separator.length;
+    const trimmed = sanitized.slice(0, maxBaseLength);
+    return `${trimmed || 'table_data'}${separator}`;
+  }
 
-  // Return deterministic name with dataset suffix for collisions
-  return `${trimmed || 'table_data'}${separator}`;
+  // Return clean name without suffix (max 63 chars for Postgres identifier)
+  return sanitized.slice(0, 63) || 'table_data';
 }
 
 export function parseDatasetRows(

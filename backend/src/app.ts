@@ -14,10 +14,12 @@ import { createFeatureEngineeringRouter } from './routes/featureEngineering.js';
 import { createLlmRouter } from './routes/llm.js';
 import { registerHealthRoutes } from './routes/health.js';
 import modelRouter from './routes/models.js';
+import { createMcpRouter } from './routes/mcp.js';
 import { createPreprocessingRouter } from './routes/preprocessing.js';
 import { registerProjectRoutes } from './routes/projects.js';
 import { createQueryRouter } from './routes/query.js';
 import executionRouter from './routes/execution.js';
+import notebookRouter from './routes/notebooks.js';
 
 export function createApp() {
   const app = express();
@@ -52,8 +54,10 @@ export function createApp() {
   router.use(createPreprocessingRouter());
   router.use(createFeatureEngineeringRouter());
   router.use(createLlmRouter());
+  router.use(createMcpRouter());
   router.use('/models', modelRouter);
   router.use('/execute', executionRouter);
+  router.use(notebookRouter);
 
   app.use('/api', router);
 
