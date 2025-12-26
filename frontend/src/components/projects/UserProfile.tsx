@@ -4,6 +4,7 @@
  * Features:
  * - Displays authenticated user name and email
  * - Profile navigation and logout action
+ * - Collapsed mode: shows only avatar, centered
  */
 
 import { useNavigate } from 'react-router-dom';
@@ -18,8 +19,13 @@ import {
 import { User, Settings, LogOut } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { logoutUser } from '@/lib/api/auth';
+import { cn } from '@/lib/utils';
 
-export function UserProfile() {
+interface UserProfileProps {
+  collapsed?: boolean;
+}
+
+export function UserProfile({ collapsed = false }: UserProfileProps) {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const refreshToken = useAuthStore((state) => state.refreshToken);
@@ -52,24 +58,31 @@ export function UserProfile() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* Full section with padding and hover effect */}
         <div
-          className="flex items-center gap-3 px-2 py-2 rounded-md cursor-pointer hover:bg-accent/50 focus:outline-none"
+          className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-accent/50 focus:outline-none transition-colors"
         >
-          <Avatar className="h-8 w-8">
+          <Avatar className="h-8 w-8 shrink-0">
             <AvatarImage src={avatarUrl} alt={displayName} />
             <AvatarFallback className="bg-primary text-primary-foreground text-xs">
               {initials}
             </AvatarFallback>
           </Avatar>
 
-          <div className="flex-1 text-left min-w-0">
+          {/* Text fades out with opacity, doesn't affect avatar position */}
+          <div
+            className={cn(
+              'flex-1 text-left min-w-0 transition-opacity duration-300',
+              collapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'
+            )}
+          >
             <p className="text-sm font-medium truncate">{displayName}</p>
             <p className="text-xs text-muted-foreground truncate">{displayEmail}</p>
           </div>
         </div>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align={collapsed ? 'center' : 'end'} side={collapsed ? 'right' : 'top'} className="w-48">
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();

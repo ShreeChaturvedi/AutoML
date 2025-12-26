@@ -38,7 +38,7 @@ export function ContinueButton({
     // This is the last phase, show completion message
     return (
       <Button
-        size="lg"
+        size="default"
         disabled
         className={cn('gap-2', className)}
       >
@@ -58,7 +58,7 @@ export function ContinueButton({
   return (
     <Button
       variant="secondary"
-      size="lg"
+      size="default"
       onClick={handleContinue}
       disabled={disabled}
       className={cn('gap-2', className)}
