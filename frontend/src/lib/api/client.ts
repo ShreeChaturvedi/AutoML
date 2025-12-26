@@ -127,6 +127,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   console.info(`[frontend api] ${method} ${url}`);
 
+  const hadAuthHeader = headers.has('Authorization');
   let response = await fetch(url, requestInit);
 
   if (
@@ -141,6 +142,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     } else {
       useAuthStore.getState().clearAuth();
     }
+  }
+
+  if (response.status === 401 && hadAuthHeader && !REFRESH_EXCLUDED_PATHS.has(normalizedPath)) {
+    headers.delete('Authorization');
+    response = await fetch(url, { ...requestInit, headers });
   }
 
   return parseResponse<T>(response, options, method, url);

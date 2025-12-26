@@ -10,8 +10,8 @@
     --card-foreground: 222.2 47.4% 11.2%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 47.4% 11.2%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
@@ -34,9 +34,9 @@
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 4%;
     --popover-foreground: 0 0% 98%;
-    /* Keep blue accents for primary */
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
+    /* Neutral primary - white button in dark mode */
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 10%;
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 10%;
@@ -201,8 +201,8 @@
   @apply my-1;
 }
 
-.markdown-content li > ul,
-.markdown-content li > ol {
+.markdown-content li>ul,
+.markdown-content li>ol {
   @apply my-1;
 }
 
@@ -218,7 +218,7 @@
   @apply font-mono text-[0.85em];
 }
 
-.markdown-content :not(pre) > code {
+.markdown-content :not(pre)>code {
   @apply px-1.5 py-0.5 rounded bg-muted text-foreground;
 }
 
@@ -251,11 +251,36 @@
 }
 
 /* First child should not have top margin */
-.markdown-content > *:first-child {
+.markdown-content>*:first-child {
   @apply mt-0;
 }
 
 /* Last child should not have bottom margin */
-.markdown-content > *:last-child {
+.markdown-content>*:last-child {
   @apply mb-0;
+}
+
+/* Loading shimmer text animation for LLM tool indicators */
+.shimmer-text {
+  background: linear-gradient(90deg,
+      currentColor 0%,
+      currentColor 35%,
+      rgba(180, 180, 190, 0.85) 50%,
+      currentColor 65%,
+      currentColor 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-sweep 2s ease-in-out infinite;
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
 }

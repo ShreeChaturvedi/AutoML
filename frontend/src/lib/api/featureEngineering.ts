@@ -1,7 +1,7 @@
 import { apiRequest } from './client';
 import type { UploadDatasetResponse } from './datasets';
 import type { FeatureSpec } from '@/types/feature';
-import type { PythonVersion } from '@/lib/pyodide/types';
+import type { PythonVersion } from '@/lib/api/execution';
 
 export interface ApplyFeatureEngineeringRequest {
   projectId: string;

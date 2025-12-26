@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { Toaster } from '@/components/ui/sonner';
 import { UploadArea } from '@/components/upload/UploadArea';
 import { DataViewerTab } from '@/components/data/DataViewerTab';
 import { PreprocessingPanel } from '@/components/preprocessing/PreprocessingPanel';
@@ -29,12 +30,21 @@ import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
 import { SignupForm } from '@/components/auth/SignupForm';
 import { useProjectStore } from '@/stores/projectStore';
 import { useAuthStore } from '@/stores/authStore';
-import { FolderOpen, Sparkles } from 'lucide-react';
+import { ArrowUpRight, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectDialog } from '@/components/projects/ProjectDialog';
 import type { Phase } from '@/types/phase';
 import { getCurrentUser } from '@/lib/api/auth';
+import { isJwtExpired } from '@/lib/auth/jwt';
 import { initMonaco } from '@/lib/monaco/preloader';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle
+} from '@/components/ui/empty';
 
 // Pre-load Monaco editor in the background to eliminate flash on code cells
 initMonaco().catch(console.error);
@@ -81,35 +91,38 @@ function HomePage() {
   }
 
   return (
-    <div className="flex h-full items-center justify-center">
-      <div className="text-center space-y-6 max-w-md">
-        <div className="flex justify-center">
-          <div className="rounded-full bg-primary/10 p-6">
-            <Sparkles className="h-12 w-12 text-primary" />
-          </div>
+    <Empty className="h-full">
+      <EmptyHeader>
+        <EmptyMedia variant="icon" className="rounded-lg">
+          <FolderOpen />
+        </EmptyMedia>
+        <EmptyTitle>
+          {projects.length === 0 ? 'No Projects Yet' : 'No Project Selected'}
+        </EmptyTitle>
+        <EmptyDescription>
+          {projects.length === 0
+            ? 'Start your first ML workflow by creating a new project or importing one.'
+            : 'Select a project from the sidebar to continue working, or create/import a new one.'}
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <div className="flex gap-2">
+          <Button onClick={() => setIsCreateDialogOpen(true)}>Create Project</Button>
+          <Button variant="outline">Import Project</Button>
         </div>
-
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-foreground">
-            AI-Augmented AutoML Toolchain
-          </h1>
-          <p className="text-muted-foreground">
-            {projects.length === 0
-              ? 'Create your first project to get started with automated machine learning workflows.'
-              : 'Select a project from the sidebar or create a new one.'}
-          </p>
-        </div>
-
-        {projects.length === 0 && (
-          <Button size="lg" onClick={() => setIsCreateDialogOpen(true)}>
-            <FolderOpen className="h-5 w-5 mr-2" />
-            Create Your First Project
-          </Button>
-        )}
-
-        <ProjectDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />
-      </div>
-    </div>
+      </EmptyContent>
+      <Button
+        variant="link"
+        asChild
+        className="text-muted-foreground"
+        size="sm"
+      >
+        <a href="https://github.com/ShreeChaturvedi/AutoML" target="_blank" rel="noreferrer">
+          Learn More <ArrowUpRight />
+        </a>
+      </Button>
+      <ProjectDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />
+    </Empty>
   );
 }
 
@@ -290,6 +303,12 @@ function App() {
         setAuthReady(true);
         return;
       }
+      if (!accessToken || isJwtExpired(accessToken)) {
+        clearAuth();
+        setLoading(false);
+        setAuthReady(true);
+        return;
+      }
 
       setLoading(true);
       try {
@@ -354,6 +373,7 @@ function App() {
             }
           />
         </Routes>
+        <Toaster />
       </div>
     </BrowserRouter>
   );

@@ -3,15 +3,18 @@ import { LlmEnvelopeSchema, type LlmEnvelope, type ToolCall, type ToolResult } f
 
 export interface LlmPlanRequest {
   projectId: string;
-  datasetId: string;
+  datasetId?: string;
   targetColumn?: string;
   prompt?: string;
+  toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
   featureSummary?: string;
+  enableThinking?: boolean;
 }
 
 export type LlmStreamEvent =
   | { type: 'token'; text: string }
+  | { type: 'thinking'; text: string }
   | { type: 'envelope'; envelope: LlmEnvelope }
   | { type: 'error'; message: string }
   | { type: 'done' };
@@ -45,6 +48,15 @@ async function streamLlm(
   onEvent: (event: LlmStreamEvent) => void,
   signal?: AbortSignal
 ) {
+  // DEBUG: Dump payload to backend for verification (silently ignore errors)
+  try {
+    fetch(`${getApiBaseUrl()}/llm/debug`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint, request })
+    }).catch(() => { /* debug only */ });
+  } catch { /* debug only */ }
+
   const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },

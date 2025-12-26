@@ -86,7 +86,7 @@ export async function deleteDataset(datasetId: string) {
 }
 
 /**
- * Download raw dataset file content for mounting in Pyodide
+ * Download raw dataset file content
  */
 export async function downloadDataset(datasetId: string): Promise<ArrayBuffer> {
   const BASE_URL = (import.meta.env.VITE_API_BASE ?? 'http://localhost:4000/api').replace(/\/$/, '');
