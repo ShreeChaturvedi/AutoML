@@ -1,327 +1,223 @@
 /**
  * Execution Store
- * 
+ *
  * Zustand store for managing Python code execution state.
- * Supports both browser (Pyodide) and cloud (Docker) execution modes.
+ * Uses cloud (Docker) execution exclusively.
  */
 
 import { create } from 'zustand';
-import type {
-    ExecutionMode,
-    PythonVersion,
-    ExecutionResult,
-    PackageInfo,
-    PackageInstallEvent
-} from '@/lib/pyodide/types';
-import {
-    loadPyodide,
-    isPyodideReady,
-    executePython,
-    installPackage as pyodideInstallPackage,
-    getInstalledPackages as getPyodidePackages,
-    mountDataset
-} from '@/lib/pyodide/pyodideClient';
+import type { ExecutionResult, PackageInfo, PackageInstallEvent, PythonVersion } from '@/lib/api/execution';
 import * as executionApi from '@/lib/api/execution';
 
 interface ExecutionState {
-    // Runtime configuration
-    mode: ExecutionMode;
-    pythonVersion: PythonVersion;
+  // Runtime configuration
+  pythonVersion: PythonVersion;
 
-    // Pyodide state
-    pyodideReady: boolean;
-    pyodideInitializing: boolean;
-    pyodideProgress: number;
-    pyodideStatusMessage: string;
+  // Cloud state
+  cloudAvailable: boolean;
+  cloudInitializing: boolean;
+  sessionId: string | null;
 
-    // Cloud state
-    cloudAvailable: boolean;
-    cloudInitializing: boolean;
-    sessionId: string | null;
+  // Package management
+  installedPackages: PackageInfo[];
+  installingPackage: boolean;
 
-    // Package management
-    installedPackages: PackageInfo[];
-    installingPackage: boolean;
+  // Execution state
+  isExecuting: boolean;
+  lastResult: ExecutionResult | null;
 
-    // Execution state
-    isExecuting: boolean;
-    lastResult: ExecutionResult | null;
-
-    // Actions
-    setMode: (mode: ExecutionMode) => void;
-    setPythonVersion: (version: PythonVersion) => void;
-    initializePyodide: () => Promise<void>;
-    initializeCloud: (projectId: string) => Promise<void>;
-    executeCode: (code: string, projectId: string) => Promise<ExecutionResult>;
-    installPackage: (
-        packageName: string,
-        projectId?: string,
-        options?: { onEvent?: (event: PackageInstallEvent) => void }
-    ) => Promise<{ success: boolean; message: string }>;
-    refreshPackages: () => Promise<void>;
-    mountDatasetFile: (filename: string, content: ArrayBuffer | string) => Promise<void>;
-    checkCloudHealth: () => Promise<void>;
-    reset: () => void;
+  // Actions
+  setPythonVersion: (version: PythonVersion) => void;
+  initializeCloud: (projectId: string) => Promise<void>;
+  executeCode: (code: string, projectId: string) => Promise<ExecutionResult>;
+  installPackage: (
+    packageName: string,
+    projectId: string,
+    options?: { onEvent?: (event: PackageInstallEvent) => void }
+  ) => Promise<{ success: boolean; message: string }>;
+  refreshPackages: () => Promise<void>;
+  checkCloudHealth: () => Promise<void>;
+  reset: () => void;
 }
 
 export const useExecutionStore = create<ExecutionState>((set, get) => ({
-    // Initial state
-    mode: 'browser',
-    pythonVersion: '3.11',
-    pyodideReady: false,
-    pyodideInitializing: false,
-    pyodideProgress: 0,
-    pyodideStatusMessage: '',
-    cloudAvailable: false,
-    cloudInitializing: false,
-    sessionId: null,
-    installedPackages: [],
-    installingPackage: false,
-    isExecuting: false,
-    lastResult: null,
+  // Initial state
+  pythonVersion: '3.11',
+  cloudAvailable: false,
+  cloudInitializing: false,
+  sessionId: null,
+  installedPackages: [],
+  installingPackage: false,
+  isExecuting: false,
+  lastResult: null,
 
-    setMode: (mode) => {
-        set({ mode });
-        // If switching to cloud, check availability
-        if (mode === 'cloud') {
-            get().checkCloudHealth();
-        }
-    },
-
-    setPythonVersion: (pythonVersion) => {
-        set({ pythonVersion });
-        // Clear session when changing Python version
-        if (get().sessionId) {
-            set({ sessionId: null });
-        }
-    },
-
-    initializePyodide: async () => {
-        if (get().pyodideReady || get().pyodideInitializing) {
-            return;
-        }
-
-        set({ pyodideInitializing: true, pyodideProgress: 0 });
-
-        try {
-            await loadPyodide((progress, message) => {
-                set({ pyodideProgress: progress, pyodideStatusMessage: message });
-            });
-
-            const packages = await getPyodidePackages();
-            set({
-                pyodideReady: true,
-                pyodideInitializing: false,
-                pyodideProgress: 100,
-                pyodideStatusMessage: 'Ready',
-                installedPackages: packages
-            });
-
-            console.log('[executionStore] Pyodide initialized successfully');
-        } catch (error) {
-            console.error('[executionStore] Pyodide initialization failed:', error);
-            set({
-                pyodideInitializing: false,
-                pyodideProgress: 0,
-                pyodideStatusMessage: 'Failed to initialize'
-            });
-            throw error;
-        }
-    },
-
-    initializeCloud: async (projectId) => {
-        const { pythonVersion, cloudAvailable: isCloudAvailable } = get();
-        if (get().cloudInitializing) {
-            return;
-        }
-
-        set({ cloudInitializing: true });
-
-        try {
-            const session = await Promise.race([
-                executionApi.createSession(projectId, pythonVersion),
-                new Promise<never>((_, reject) =>
-                    setTimeout(() => reject(new Error('Cloud runtime initialization timed out.')), 120000)
-                )
-            ]);
-            set({
-                sessionId: session.id,
-                installedPackages: session.installedPackages ?? [],
-                cloudAvailable: true,
-                cloudInitializing: false
-            });
-
-            console.log('[executionStore] Cloud session created:', session.id);
-        } catch (error) {
-            console.error('[executionStore] Cloud initialization failed:', error);
-            set({
-                cloudAvailable: isCloudAvailable,
-                cloudInitializing: false,
-                sessionId: null
-            });
-            throw error;
-        }
-    },
-
-    executeCode: async (code, projectId) => {
-        const { mode, sessionId, pythonVersion, pyodideReady } = get();
-
-        set({ isExecuting: true, lastResult: null });
-
-        try {
-            let result: ExecutionResult;
-
-            if (mode === 'browser') {
-                // Ensure Pyodide is ready
-                if (!pyodideReady) {
-                    await get().initializePyodide();
-                }
-
-                result = await executePython(code);
-            } else {
-                if (!sessionId) {
-                    await get().initializeCloud(projectId);
-                }
-
-                const activeSessionId = get().sessionId;
-                if (!activeSessionId) {
-                    throw new Error('Cloud runtime session is unavailable.');
-                }
-
-                result = await executionApi.executeCode({
-                    projectId,
-                    code,
-                    sessionId: activeSessionId,
-                    pythonVersion
-                });
-            }
-
-            set({ lastResult: result, isExecuting: false });
-            return result;
-        } catch (error) {
-            const errorResult: ExecutionResult = {
-                status: 'error',
-                stdout: '',
-                stderr: error instanceof Error ? error.message : 'Unknown error',
-                outputs: [{
-                    type: 'error' as const,
-                    content: error instanceof Error ? error.message : 'Execution failed'
-                }],
-                executionMs: 0,
-                error: error instanceof Error ? error.message : 'Unknown error'
-            };
-
-            set({ lastResult: errorResult, isExecuting: false });
-            return errorResult;
-        }
-    },
-
-    installPackage: async (packageName, projectId, options) => {
-        const { mode, sessionId } = get();
-        const onEvent = options?.onEvent;
-
-        set({ installingPackage: true });
-
-        try {
-            let result: { success: boolean; message: string };
-
-            if (mode === 'browser') {
-                onEvent?.({ type: 'progress', progress: 12, stage: 'Preparing' });
-                onEvent?.({ type: 'progress', progress: 50, stage: 'Installing' });
-                result = await pyodideInstallPackage(packageName);
-                if (result.success) {
-                    set({ installedPackages: await getPyodidePackages() });
-                    onEvent?.({ type: 'progress', progress: 100, stage: 'Completed' });
-                    onEvent?.({ type: 'done', success: true, message: result.message });
-                } else {
-                    onEvent?.({ type: 'done', success: false, message: result.message });
-                }
-            } else {
-                if (!sessionId && projectId) {
-                    await get().initializeCloud(projectId);
-                }
-
-                const activeSessionId = get().sessionId;
-                if (!activeSessionId) {
-                    result = { success: false, message: 'No active cloud session' };
-                } else {
-                    result = await executionApi.installPackageStream(activeSessionId, packageName, (event) => {
-                        onEvent?.(event);
-                    });
-                    if (result.success) {
-                        const packages = await executionApi.listPackages(activeSessionId);
-                        set({ installedPackages: packages });
-                        onEvent?.({ type: 'progress', progress: 100, stage: 'Completed' });
-                    }
-                }
-            }
-
-            set({ installingPackage: false });
-            return result;
-        } catch (error) {
-            set({ installingPackage: false });
-            onEvent?.({
-                type: 'done',
-                success: false,
-                message: error instanceof Error ? error.message : 'Failed to install package'
-            });
-            return {
-                success: false,
-                message: error instanceof Error ? error.message : 'Failed to install package'
-            };
-        }
-    },
-
-    refreshPackages: async () => {
-        const { mode, sessionId } = get();
-
-        if (mode === 'browser') {
-            set({ installedPackages: await getPyodidePackages() });
-            return;
-        }
-
-        if (!sessionId) {
-            return;
-        }
-
-        try {
-            const packages = await executionApi.listPackages(sessionId);
-            set({ installedPackages: packages });
-        } catch (error) {
-            console.error('[executionStore] Failed to refresh packages:', error);
-        }
-    },
-
-    mountDatasetFile: async (filename, content) => {
-        const { mode } = get();
-
-        if (mode === 'browser') {
-            await mountDataset(filename, content);
-        }
-        // For cloud mode, datasets are mounted automatically via Docker volumes
-    },
-
-    checkCloudHealth: async () => {
-        try {
-            const health = await executionApi.getExecutionHealth();
-            set({ cloudAvailable: health.dockerAvailable });
-        } catch {
-            set({ cloudAvailable: false });
-        }
-    },
-
-    reset: () => {
-        set({
-            mode: 'browser',
-            pythonVersion: '3.11',
-            sessionId: null,
-            installedPackages: [],
-            cloudInitializing: false,
-            isExecuting: false,
-            lastResult: null
-        });
-        if (isPyodideReady()) {
-            void getPyodidePackages().then((packages) => set({ installedPackages: packages }));
-        }
+  setPythonVersion: (pythonVersion) => {
+    set({ pythonVersion });
+    // Clear session when changing Python version
+    if (get().sessionId) {
+      set({ sessionId: null });
     }
+  },
+
+  initializeCloud: async (projectId) => {
+    const { pythonVersion, cloudAvailable: isCloudAvailable } = get();
+    if (get().cloudInitializing) {
+      return;
+    }
+
+    set({ cloudInitializing: true });
+
+    try {
+      const session = await Promise.race([
+        executionApi.createSession(projectId, pythonVersion),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Cloud runtime initialization timed out.')), 120000)
+        )
+      ]);
+      set({
+        sessionId: session.id,
+        installedPackages: session.installedPackages ?? [],
+        cloudAvailable: true,
+        cloudInitializing: false
+      });
+
+      console.log('[executionStore] Cloud session created:', session.id);
+    } catch (error) {
+      console.error('[executionStore] Cloud initialization failed:', error);
+      set({
+        cloudAvailable: isCloudAvailable,
+        cloudInitializing: false,
+        sessionId: null
+      });
+      throw error;
+    }
+  },
+
+  executeCode: async (code, projectId) => {
+    const { sessionId, pythonVersion } = get();
+
+    console.log('[executionStore] executeCode called');
+    set({ isExecuting: true, lastResult: null });
+
+    try {
+      // Ensure cloud session exists
+      if (!sessionId) {
+        await get().initializeCloud(projectId);
+      }
+
+      const activeSessionId = get().sessionId;
+      if (!activeSessionId) {
+        throw new Error('Cloud runtime session is unavailable. Please ensure Docker is running.');
+      }
+
+      const result = await executionApi.executeCode({
+        projectId,
+        code,
+        sessionId: activeSessionId,
+        pythonVersion
+      });
+
+      set({ lastResult: result, isExecuting: false });
+      return result;
+    } catch (error) {
+      const errorResult: ExecutionResult = {
+        status: 'error',
+        stdout: '',
+        stderr: error instanceof Error ? error.message : 'Unknown error',
+        outputs: [{
+          type: 'error' as const,
+          content: error instanceof Error ? error.message : 'Execution failed'
+        }],
+        executionMs: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+
+      set({ lastResult: errorResult, isExecuting: false });
+      return errorResult;
+    }
+  },
+
+  installPackage: async (packageName, projectId, options) => {
+    const { sessionId } = get();
+    const onEvent = options?.onEvent;
+
+    set({ installingPackage: true });
+
+    try {
+      // Ensure cloud session exists
+      if (!sessionId) {
+        await get().initializeCloud(projectId);
+      }
+
+      const activeSessionId = get().sessionId;
+      if (!activeSessionId) {
+        const result = { success: false, message: 'No active cloud session' };
+        onEvent?.({ type: 'done', success: false, message: result.message });
+        set({ installingPackage: false });
+        return result;
+      }
+
+      const result = await executionApi.installPackageStream(activeSessionId, packageName, (event) => {
+        onEvent?.(event);
+      });
+
+      if (result.success) {
+        const packages = await executionApi.listPackages(activeSessionId);
+        set({ installedPackages: packages });
+        onEvent?.({ type: 'progress', progress: 100, stage: 'Completed' });
+      }
+
+      set({ installingPackage: false });
+      return result;
+    } catch (error) {
+      set({ installingPackage: false });
+      onEvent?.({
+        type: 'done',
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to install package'
+      });
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to install package'
+      };
+    }
+  },
+
+  refreshPackages: async () => {
+    const { sessionId } = get();
+
+    if (!sessionId) {
+      return;
+    }
+
+    try {
+      const packages = await executionApi.listPackages(sessionId);
+      set({ installedPackages: packages });
+    } catch (error) {
+      console.error('[executionStore] Failed to refresh packages:', error);
+    }
+  },
+
+  checkCloudHealth: async () => {
+    try {
+      const health = await executionApi.getExecutionHealth();
+      set({ cloudAvailable: health.dockerAvailable });
+    } catch {
+      set({ cloudAvailable: false });
+    }
+  },
+
+  reset: () => {
+    set({
+      pythonVersion: '3.11',
+      sessionId: null,
+      installedPackages: [],
+      cloudInitializing: false,
+      isExecuting: false,
+      lastResult: null
+    });
+  }
 }));
+
+// Re-export types for convenience
+export type { ExecutionResult, PackageInfo, PackageInstallEvent, PythonVersion };
