@@ -32,7 +32,7 @@ import { useTheme } from '@/components/theme-provider';
 import { CellOutputRenderer } from './CellOutputRenderer';
 import type { languages, IDisposable } from 'monaco-editor';
 import type { Monaco } from '@monaco-editor/react';
-import type { RichOutput } from '@/lib/pyodide/types';
+import type { RichOutput } from '@/lib/api/execution';
 
 // Lazy load Monaco Editor
 const Editor = lazy(() =>

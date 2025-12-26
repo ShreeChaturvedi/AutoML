@@ -5,7 +5,7 @@
  */
 
 import { cn } from '@/lib/utils';
-import type { RichOutput } from '@/lib/pyodide/types';
+import type { RichOutput } from '@/lib/api/execution';
 import { AlertCircle, Table2, Image as ImageIcon } from 'lucide-react';
 
 interface CellOutputRendererProps {
