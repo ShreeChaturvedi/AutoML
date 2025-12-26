@@ -1,104 +1,44 @@
 import type { DatasetProfile } from '../../types/dataset.js';
 import type { FeatureMethod } from '../featureEngineering.js';
-import type { LlmRequest } from './llmClient.js';
+import type {
+  LlmRequest,
+  LlmToolDefinition,
+  LlmToolCallHistory,
+  LlmToolResultHistory
+} from './llmClient.js';
 import type { ToolResult } from '../../types/llm.js';
-import { buildToolDescriptionText } from './toolRegistry.js';
-
-const JSON_START = '<<<JSON>>>';
-const JSON_END = '<<<END>>>';
-
-export function getJsonMarkers() {
-  return { JSON_START, JSON_END };
-}
-
-const TOOL_DESCRIPTIONS = `
-Tools you can request (only when you must):
-${buildToolDescriptionText()}
-`.trim();
-
-const UI_SCHEMA = `
-UI JSON schema (use only these types):
-{
-  "version": "1",
-  "kind": "feature_engineering" | "training",
-  "title": string?,
-  "summary": string?,
-  "sections": [
-    {
-      "id": string,
-      "title": string?,
-      "layout": "grid" | "column" | "row"?,
-      "columns": number?,
-      "items": UIItem[]
-    }
-  ]
-}
-
-UIItem types:
-- dataset_summary: { "type": "dataset_summary", "datasetId": string, "filename": string, "rows": number, "columns": number, "notes"?: string[] }
-- feature_suggestion: { "type": "feature_suggestion", "id": string, "feature": FeatureSpec, "rationale": string, "impact": "high"|"medium"|"low", "controls"?: Control[] }
-- model_recommendation: { "type": "model_recommendation", "id": string, "template": ModelTemplate, "parameters": object, "rationale": string }
-- code_cell: { "type": "code_cell", "id": string, "title"?: string, "language": "python", "content": string, "autoRun"?: boolean }
-- action: { "type": "action", "id": string, "label": string, "actionType": "insert_code_cell"|"apply_features"|"train_model", "payload"?: object }
-- callout: { "type": "callout", "tone": "info"|"warning"|"success", "text": string }
-
-Control:
-{ "key": string, "label": string, "type": "number"|"boolean"|"select"|"text"|"column", "value": any, "min"?: number, "max"?: number, "step"?: number, "options"?: { "value": string, "label": string }[] }
-
-FeatureSpec:
-{ "sourceColumn": string, "secondaryColumn"?: string, "featureName": string, "description"?: string, "method": string, "params"?: object }
-
-ModelTemplate:
-{ "name": string, "taskType": "classification"|"regression"|"clustering", "library": string, "importPath": string, "modelClass": string, "parameters": [{ "key": string, "label": string, "type": "number"|"string"|"boolean"|"select", "default": any, "min"?: number, "max"?: number, "step"?: number, "options"?: { "value": string, "label": string }[] }], "metrics": string[] }
-`.trim();
-
-const OUTPUT_RULES = `
-Output format (STRICT - follow exactly):
-1) Short assistant text (1-3 sentences).
-2) Then output EXACTLY: ${JSON_START}
-3) Then output valid JSON (the envelope object).
-4) Then output EXACTLY: ${JSON_END}
-5) Do not output anything after ${JSON_END}.
-
-CRITICAL: Do NOT use markdown code blocks (\`\`\`json). Use ONLY ${JSON_START} and ${JSON_END} as delimiters.
-CRITICAL: Never output any backticks in the assistant text.
-
-Envelope JSON schema (MUST follow this exactly):
-{
-  "version": "1",
-  "kind": "feature_engineering" | "training",
-  "message": string?,
-  "tool_calls": [{ "id": string, "tool": string, "args": object, "rationale"?: string }]?,
-  "ui": {
-    "version": "1",
-    "kind": "feature_engineering" | "training",
-    "title": string?,
-    "summary": string?,
-    "sections": UISection[]
-  } | null
-}
-
-IMPORTANT: The "ui" field must be an object containing the UI schema. Do NOT put title/summary/sections at the root level.
-
-Example:
-${JSON_START}
-{"version":"1","kind":"training","ui":{"version":"1","kind":"training","title":"My Plan","sections":[...]}}
-${JSON_END}
-
-If you need tools, set ui to null and include tool_calls.
-If tool_calls is empty or omitted, ui must be present.
-`.trim();
+import { LLM_ALL_TOOLS } from './toolRegistry.js';
 
 function buildSystemPrompt() {
-  return [
-    'You are an AutoML workflow designer.',
-    'Generate deterministic-looking UI plans driven by data context.',
-    'When you lack information, request tool calls instead of guessing.',
-    'Include only the UI items you need and order them by impact.',
-    TOOL_DESCRIPTIONS,
-    UI_SCHEMA,
-    OUTPUT_RULES
-  ].join('\n\n');
+  return `You are an ML assistant. You help users explore datasets, write code, and train machine learning models.
+
+RESPONSE FORMAT:
+- Respond in proper markdown. Use **bold**, *italic*, bullet points, headers, and code blocks.
+- Never output JSON, XML, or custom structured data as your response text. Markdown only.
+- When you need to show tabular data, use markdown tables.
+- For code blocks, ALWAYS use triple backticks with language identifier:
+  \`\`\`python
+  print("Hello")
+  \`\`\`
+  Never write code without proper triple backtick fencing.
+- For inline code, use single backticks: \`variable_name\`
+- For mathematical equations, use LaTeX with proper delimiters:
+  - Inline math: $E = mc^2$
+  - Display math: $$x = \\\\frac{-b \\\\pm \\\\sqrt{b^2 - 4ac}}{2a}$$
+  - Do NOT use code blocks with "latex" label. Always use $ or $$ delimiters.
+
+DATASET ACCESS:
+When writing Python code to access datasets, use the resolve_dataset_path() function:
+\`\`\`python
+dataset_path = resolve_dataset_path("filename.csv", "datasetId")
+df = pd.read_csv(dataset_path)
+\`\`\`
+The resolve_dataset_path function is pre-defined in the execution environment. Never use direct file paths.
+
+WORKFLOW:
+- Use the provided tools via native function calling when you need to take actions
+- After tools complete, summarize results in plain markdown
+- Be conversational. Answer questions directly.`;
 }
 
 export function buildFeatureEngineeringRequest(params: {
@@ -107,9 +47,28 @@ export function buildFeatureEngineeringRequest(params: {
   prompt?: string;
   ragSnippets?: Array<{ filename: string; snippet: string }>;
   toolResults?: ToolResult[];
+  toolCallHistory?: LlmToolCallHistory[];
+  toolResultHistory?: LlmToolResultHistory[];
   featureMethods: FeatureMethod[];
+  toolDefinitions?: LlmToolDefinition[];
+  enableThinking?: boolean;
 }): LlmRequest {
-  const { dataset, targetColumn, prompt, ragSnippets, toolResults, featureMethods } = params;
+  const {
+    dataset,
+    targetColumn,
+    prompt,
+    ragSnippets,
+    toolResults,
+    toolCallHistory,
+    toolResultHistory,
+    featureMethods,
+    toolDefinitions,
+    enableThinking
+  } = params;
+  const tools = toolDefinitions ?? LLM_ALL_TOOLS;
+  const toolSummary = toolResults?.length
+    ? `Tool results available for: ${toolResults.map((result) => result.tool).join(', ')}.`
+    : 'Tool results: (none)';
 
   const userContent = [
     `Goal: Generate a feature engineering plan and UI for dataset "${dataset.filename}".`,
@@ -117,18 +76,20 @@ export function buildFeatureEngineeringRequest(params: {
     `Target column: ${targetColumn ?? 'unspecified'}`,
     `Dataset summary: ${dataset.nRows} rows, ${dataset.nCols} columns.`,
     `Columns: ${dataset.columns.map((column) => `${column.name} (${column.dtype})`).join(', ')}`,
+    'Dataset access: use resolve_dataset_path(filename, datasetId) when writing Python code.',
     dataset.sample?.length
       ? `Sample rows: ${JSON.stringify(dataset.sample.slice(0, 5))}`
       : 'Sample rows: (none)',
     ragSnippets?.length
       ? `RAG snippets:\n${ragSnippets.map((doc, idx) => `${idx + 1}. ${doc.filename}: ${doc.snippet}`).join('\n')}`
       : 'RAG snippets: (none)',
+    toolSummary,
     toolResults?.length
-      ? `Tool results:\n${JSON.stringify(toolResults, null, 2)}`
-      : 'Tool results: (none)',
+      ? 'If the tool results are sufficient, call render_ui. Otherwise call another tool.'
+      : '',
     `Supported feature methods: ${featureMethods.join(', ')}.`,
     'Select only relevant UI items. Use code_cell only when runnable code is essential.'
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   return {
     messages: [
@@ -136,7 +97,13 @@ export function buildFeatureEngineeringRequest(params: {
       { role: 'user', content: userContent }
     ],
     temperature: 0.3,
-    maxOutputTokens: 2048
+    maxOutputTokens: 2048,
+    tools,
+    toolChoice: 'auto',
+    toolCallHistory,
+    toolResultHistory,
+    enableThinking,
+    contextId: dataset.projectId ?? dataset.datasetId
   };
 }
 
@@ -147,34 +114,57 @@ export function buildTrainingRequest(params: {
   ragSnippets?: Array<{ filename: string; snippet: string }>;
   toolResults?: ToolResult[];
   featureSummary?: string;
+  toolCallHistory?: LlmToolCallHistory[];
+  toolResultHistory?: LlmToolResultHistory[];
+  toolDefinitions?: LlmToolDefinition[];
+  enableThinking?: boolean;
 }): LlmRequest {
-  const { dataset, targetColumn, prompt, ragSnippets, toolResults, featureSummary } = params;
+  const {
+    dataset,
+    targetColumn,
+    prompt,
+    ragSnippets,
+    toolResults,
+    featureSummary,
+    toolCallHistory,
+    toolResultHistory,
+    toolDefinitions,
+    enableThinking
+  } = params;
+  const tools = toolDefinitions ?? LLM_ALL_TOOLS;
 
-  const userContent = [
-    `Goal: Recommend training approach for dataset "${dataset.filename}".`,
-    prompt ? `User intent: ${prompt}` : 'User intent: (not provided)',
-    `Target column: ${targetColumn ?? 'unspecified'}`,
-    `Dataset summary: ${dataset.nRows} rows, ${dataset.nCols} columns.`,
-    `Columns: ${dataset.columns.map((column) => `${column.name} (${column.dtype})`).join(', ')}`,
-    dataset.sample?.length
-      ? `Sample rows: ${JSON.stringify(dataset.sample.slice(0, 5))}`
-      : 'Sample rows: (none)',
-    featureSummary ? `Feature engineering context: ${featureSummary}` : 'Feature engineering context: (none)',
+  // Build context block that is INFORMATIONAL, not instructional
+  const contextParts = [
+    `[Context - Available dataset: "${dataset.filename}" (${dataset.nRows} rows, ${dataset.nCols} columns)]`,
+    targetColumn ? `[Target column: ${targetColumn}]` : null,
+    `[Columns: ${dataset.columns.map((column) => `${column.name} (${column.dtype})`).join(', ')}]`,
+    featureSummary ? `[Feature engineering applied: ${featureSummary}]` : null,
     ragSnippets?.length
-      ? `RAG snippets:\n${ragSnippets.map((doc, idx) => `${idx + 1}. ${doc.filename}: ${doc.snippet}`).join('\n')}`
-      : 'RAG snippets: (none)',
+      ? `[Relevant docs:\n${ragSnippets.map((doc) => `- ${doc.filename}: ${doc.snippet.slice(0, 200)}`).join('\n')}]`
+      : null,
     toolResults?.length
-      ? `Tool results:\n${JSON.stringify(toolResults, null, 2)}`
-      : 'Tool results: (none)',
-    'Select only relevant UI items. Use code_cell only when runnable code is essential.'
-  ].join('\n');
+      ? `[Previous tool results: ${toolResults.map((r) => `${r.tool}: ${r.error ?? 'success'}`).join(', ')}]`
+      : null
+  ].filter(Boolean);
+
+  // User prompt is the PRIMARY content
+  // If no prompt (shouldn't happen), just pass context
+  const userContent = prompt
+    ? `${prompt}\n\n${contextParts.join('\n')}`
+    : contextParts.join('\n');
 
   return {
     messages: [
       { role: 'system', content: buildSystemPrompt() },
       { role: 'user', content: userContent }
     ],
-    temperature: 0.3,
-    maxOutputTokens: 2048
+    temperature: 0.4,
+    maxOutputTokens: 4096,
+    tools,
+    toolChoice: 'auto',
+    toolCallHistory,
+    toolResultHistory,
+    enableThinking,
+    contextId: dataset.projectId ?? dataset.datasetId
   };
 }

@@ -5,14 +5,25 @@ export const ToolNameSchema = z.enum([
   'get_dataset_profile',
   'get_dataset_sample',
   'search_documents',
-  'run_python'
+  'list_cells',
+  'read_cell',
+  'write_cell',
+  'edit_cell',
+  'run_cell',
+  'delete_cell',
+  'reorder_cells',
+  'insert_cell',
+  'install_package',
+  'uninstall_package',
+  'list_packages'
 ]);
 
 export const ToolCallSchema = z.object({
   id: z.string().min(1),
   tool: ToolNameSchema,
   args: z.record(z.unknown()).optional(),
-  rationale: z.string().optional()
+  rationale: z.string().optional(),
+  thoughtSignature: z.string().optional()
 });
 
 export type ToolCall = z.infer<typeof ToolCallSchema>;
@@ -30,6 +41,6 @@ export type LlmEnvelope = z.infer<typeof LlmEnvelopeSchema>;
 export interface ToolResult {
   id: string;
   tool: ToolCall['tool'];
-  output: unknown;
+  output?: unknown;
   error?: string;
 }

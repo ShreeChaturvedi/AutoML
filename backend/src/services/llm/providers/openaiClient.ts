@@ -1,4 +1,4 @@
-import type { LlmClient, LlmRequest } from '../llmClient.js';
+import type { LlmClient, LlmRequest, LlmStreamHandlers } from '../llmClient.js';
 
 interface OpenAiClientOptions {
   apiKey: string;
@@ -37,7 +37,7 @@ export class OpenAiClient implements LlmClient {
     return extractOpenAiText(payload);
   }
 
-  async stream(request: LlmRequest, handlers: { onToken: (token: string) => void }): Promise<string> {
+  async stream(request: LlmRequest, handlers: LlmStreamHandlers): Promise<string> {
     const body = buildOpenAiBody(request, this.model, true);
     const response = await this.fetchWithTimeout(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
@@ -125,12 +125,31 @@ export class OpenAiClient implements LlmClient {
 }
 
 function buildOpenAiBody(request: LlmRequest, model: string, stream: boolean) {
+  const tools = request.tools?.length
+    ? request.tools.map((tool) => ({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters
+        }
+      }))
+    : undefined;
+
+  const toolChoice = request.toolChoice
+    ? request.toolChoice === 'any'
+      ? 'required'
+      : request.toolChoice
+    : undefined;
+
   return {
     model,
     messages: request.messages.map((msg) => ({ role: msg.role, content: msg.content })),
     temperature: request.temperature ?? 0.3,
     max_tokens: request.maxOutputTokens ?? 2048,
     stream,
+    tools,
+    tool_choice: tools ? toolChoice : undefined,
     response_format: request.responseMimeType === 'application/json'
       ? { type: 'json_object' }
       : undefined
