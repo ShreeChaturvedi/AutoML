@@ -23,10 +23,15 @@ async function execDocker(
     args: string[],
     options: ExecFileOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
-    return execFileAsync('docker', args, {
+    const result = await execFileAsync('docker', args, {
         maxBuffer: 1024 * 1024,
+        encoding: 'utf8',
         ...options
     });
+    return {
+        stdout: typeof result.stdout === 'string' ? result.stdout : result.stdout.toString('utf8'),
+        stderr: typeof result.stderr === 'string' ? result.stderr : result.stderr.toString('utf8')
+    };
 }
 function resolveRuntimeDockerfilePath(): string {
     const candidates = [
@@ -288,15 +293,32 @@ if '/workspace/.python' not in sys.path:
     sys.path.insert(0, '/workspace/.python')
 
 def resolve_dataset_path(filename, dataset_id=None):
-    """Resolve dataset path across cloud and browser mounts."""
+    """Resolve dataset path across cloud and browser mounts.
+
+    Checks multiple locations in order of priority:
+    1. Direct filename in workspace root (/workspace/{filename})
+    2. Workspace datasets dir (/workspace/datasets/{filename})
+    3. Mounted datasets dir (/datasets/{filename})
+    4. UUID-based paths if dataset_id provided
+    5. Fallback to recursive search
+    """
     candidates = []
 
+    # First priority: direct filename access (workspace root and datasets dir)
+    candidates.extend([
+        Path('/workspace') / filename,
+        Path('/workspace/datasets') / filename,
+        Path('/datasets') / filename
+    ])
+
+    # UUID-based paths if dataset_id is provided
     if dataset_id:
         candidates.extend([
             Path('/workspace/datasets') / dataset_id / filename,
             Path('/datasets') / dataset_id / filename
         ])
 
+        # Alias pattern with suffix
         suffix = ''.join([c for c in str(dataset_id) if c.isalnum()])[:8]
         if suffix:
             stem = Path(filename).stem
@@ -307,19 +329,19 @@ def resolve_dataset_path(filename, dataset_id=None):
                 Path('/datasets') / alias
             ])
 
-    candidates.extend([
-        Path('/workspace/datasets') / filename,
-        Path('/datasets') / filename
-    ])
-
+    # Check all candidates
     for candidate in candidates:
         if candidate.exists():
             return str(candidate)
-    for root in [Path('/workspace/datasets'), Path('/datasets')]:
+
+    # Fallback: recursive search
+    for root in [Path('/workspace'), Path('/workspace/datasets'), Path('/datasets')]:
         if root.exists():
             matches = list(root.rglob(filename))
             if matches:
                 return str(matches[0])
+
+    # Return first candidate as fallback (will fail with clear error)
     return str(candidates[0])
 
 try:
@@ -419,7 +441,7 @@ with open('/workspace/${outputFilename}', 'w') as f:
 
     try {
         return await Promise.race([executionPromise, timeoutPromise]);
-    } catch (error) {
+    } catch {
         return {
             status: 'timeout',
             stdout,
@@ -499,6 +521,51 @@ export async function installPackage(
         return {
             success: false,
             message: error instanceof Error ? error.message : 'Failed to install package'
+        };
+    }
+}
+
+/**
+ * Uninstall a package from a container
+ */
+export async function uninstallPackage(
+    container: Container,
+    packageName: string
+): Promise<{ success: boolean; message: string }> {
+    const trimmed = packageName.trim();
+    if (!trimmed) {
+        return { success: false, message: 'No package name provided.' };
+    }
+
+    try {
+        const { stdout, stderr } = await execDocker([
+            'exec',
+            container.containerId,
+            'python',
+            '-m',
+            'pip',
+            'uninstall',
+            '-y',
+            '--target',
+            '/workspace/.python',
+            trimmed
+        ], { timeout: 60000 });
+
+        const output = (stdout + stderr).toLowerCase();
+        if (output.includes('successfully uninstalled') || output.includes('not installed')) {
+            return {
+                success: true,
+                message: output.includes('not installed')
+                    ? `Package "${trimmed}" was not installed.`
+                    : `Successfully uninstalled ${trimmed}`
+            };
+        }
+
+        return { success: true, message: stdout || stderr || `Uninstalled ${trimmed}` };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Failed to uninstall package'
         };
     }
 }
@@ -817,3 +884,239 @@ export async function cleanupStaleContainers(): Promise<void> {
 
 // Run cleanup every 5 minutes
 setInterval(cleanupStaleContainers, 5 * 60 * 1000);
+
+/**
+ * Kill all Docker containers matching our naming pattern.
+ * Called on server startup to clean up orphaned containers from previous runs.
+ */
+export async function killOrphanedContainers(): Promise<number> {
+    try {
+        // Find all containers matching our pattern (including stopped ones)
+        const { stdout } = await execDocker([
+            'ps', '-a', '-q',
+            '--filter', 'name=automl-exec-'
+        ]);
+
+        const containerIds = stdout.trim().split('\n').filter(Boolean);
+
+        if (containerIds.length === 0) {
+            console.log('[containerManager] No orphaned containers found');
+            return 0;
+        }
+
+        console.log(`[containerManager] Found ${containerIds.length} orphaned container(s), cleaning up...`);
+
+        // Force remove all matching containers
+        await execDocker(['rm', '-f', ...containerIds]);
+
+        console.log(`[containerManager] Cleaned up ${containerIds.length} orphaned container(s)`);
+        return containerIds.length;
+    } catch (error) {
+        // Ignore errors - containers may already be gone or Docker unavailable
+        console.warn('[containerManager] Error cleaning up orphaned containers:', error);
+        return 0;
+    }
+}
+
+/**
+ * Destroy all tracked containers. Called on server shutdown.
+ */
+export async function destroyAllContainers(): Promise<void> {
+    const containerList = Array.from(containers.entries());
+
+    if (containerList.length === 0) {
+        return;
+    }
+
+    console.log(`[containerManager] Destroying ${containerList.length} active container(s)...`);
+
+    await Promise.all(
+        containerList.map(([id]) => destroyContainer(id).catch(() => {}))
+    );
+
+    // Clear the jedi tracking set too
+    jediInstalledContainers.clear();
+
+    console.log('[containerManager] All containers destroyed');
+}
+
+/**
+ * Clean up workspace directories that have no associated running container.
+ */
+async function cleanupOrphanedWorkspaces(): Promise<void> {
+    try {
+        const workspacesDir = resolve(env.executionWorkspaceDir);
+        const { readdir } = await import('fs/promises');
+
+        if (!existsSync(workspacesDir)) {
+            return;
+        }
+
+        const entries = await readdir(workspacesDir);
+
+        if (entries.length === 0) {
+            return;
+        }
+
+        // Remove all workspace directories since we just cleaned all containers
+        for (const entry of entries) {
+            const entryPath = join(workspacesDir, entry);
+            await rm(entryPath, { recursive: true, force: true }).catch(() => {});
+        }
+
+        console.log(`[containerManager] Cleaned up ${entries.length} orphaned workspace(s)`);
+    } catch (error) {
+        console.warn('[containerManager] Error cleaning up orphaned workspaces:', error);
+    }
+}
+
+/**
+ * Initialize container manager - cleans up orphaned containers and workspaces.
+ * Must be called before accepting any execution requests.
+ */
+export async function initializeContainerManager(): Promise<void> {
+    console.log('[containerManager] Initializing...');
+
+    // Clean up any orphaned containers from previous runs
+    const cleaned = await killOrphanedContainers();
+
+    // Clean up orphaned workspace directories
+    await cleanupOrphanedWorkspaces();
+
+    console.log(`[containerManager] Initialization complete (cleaned ${cleaned} containers)`);
+}
+
+/**
+ * Python completion result
+ */
+export interface PythonCompletion {
+    name: string;
+    type: 'function' | 'class' | 'module' | 'variable' | 'keyword' | 'statement' | 'param' | 'property';
+    module?: string;
+    signature?: string;
+    docstring?: string;
+}
+
+/**
+ * Get Python completions using Jedi
+ */
+export async function getCompletions(
+    container: Container,
+    code: string,
+    line: number,
+    column: number
+): Promise<PythonCompletion[]> {
+    try {
+        // First ensure jedi is installed
+        await ensureJediInstalled(container);
+
+        // Create a script that gets completions using Jedi
+        const script = `
+import sys
+import json
+
+# Ensure jedi is available
+try:
+    import jedi
+except ImportError:
+    print("[]")
+    sys.exit(0)
+
+code = '''${code.replace(/'/g, "\\'")}'''
+
+try:
+    script = jedi.Script(code)
+    completions = script.complete(${line}, ${column})
+
+    results = []
+    for c in completions[:50]:  # Limit to 50 completions
+        comp = {
+            "name": c.name,
+            "type": c.type or "statement"
+        }
+        if c.module_name:
+            comp["module"] = c.module_name
+
+        # Get signature for functions
+        try:
+            sigs = c.get_signatures()
+            if sigs:
+                comp["signature"] = str(sigs[0])
+        except:
+            pass
+
+        # Get docstring (truncated)
+        try:
+            doc = c.docstring()
+            if doc:
+                comp["docstring"] = doc[:200]
+        except:
+            pass
+
+        results.append(comp)
+
+    print(json.dumps(results))
+except Exception as e:
+    print(json.dumps([]))
+`;
+
+        const { stdout } = await execDocker([
+            'exec',
+            container.containerId,
+            'python',
+            '-c',
+            script
+        ], { timeout: 5000 });
+
+        try {
+            const completions = JSON.parse(stdout.trim()) as PythonCompletion[];
+            return completions;
+        } catch {
+            return [];
+        }
+    } catch {
+        return [];
+    }
+}
+
+// Track jedi installation status per container
+const jediInstalledContainers = new Set<string>();
+
+async function ensureJediInstalled(container: Container): Promise<void> {
+    if (jediInstalledContainers.has(container.containerId)) {
+        return;
+    }
+
+    // Check if jedi is installed
+    try {
+        await execDocker([
+            'exec',
+            container.containerId,
+            'python',
+            '-c',
+            'import jedi'
+        ], { timeout: 3000 });
+        jediInstalledContainers.add(container.containerId);
+        return;
+    } catch {
+        // Jedi not installed, install it
+    }
+
+    try {
+        await execDocker([
+            'exec',
+            container.containerId,
+            'python',
+            '-m',
+            'pip',
+            'install',
+            '--quiet',
+            '--target',
+            '/workspace/.python',
+            'jedi'
+        ], { timeout: 60000 });
+        jediInstalledContainers.add(container.containerId);
+    } catch (error) {
+        console.warn('[containerManager] Failed to install jedi:', error);
+    }
+}
