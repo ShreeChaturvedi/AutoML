@@ -12,21 +12,21 @@ import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Loader2, 
-  Sparkles, 
-  Zap, 
-  RotateCcw, 
+import {
+  Loader2,
+  Sparkles,
+  Zap,
+  RotateCcw,
   Database,
   AlertTriangle,
   CheckCircle2,
@@ -39,7 +39,7 @@ import type { Severity } from '@/types/preprocessing';
 
 export function PreprocessingPanel() {
   const { projectId } = useParams<{ projectId: string }>();
-  
+
   // Preprocessing store
   const {
     analysis,
@@ -104,44 +104,38 @@ export function PreprocessingPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 px-6 py-4 border-b bg-muted/30 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-primary/10 p-2">
-            <Settings2 className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold">Data Preprocessing</h2>
-          </div>
+      {/* Header - h-14 to align with sidebar */}
+      <div className="flex h-14 items-center justify-between gap-4 px-4 border-b shrink-0">
+        <div className="flex items-center gap-2">
+          <Settings2 className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold">Data Preprocessing</span>
         </div>
 
         {/* Table selector */}
-        <div className="flex items-center gap-3">
-          <Select
-            value={selectedDatasetId ?? ''}
-            onValueChange={handleDatasetSelect}
-            disabled={isLoadingTables || availableTables.length === 0}
-          >
-            <SelectTrigger className="w-[250px]">
-              <Database className="h-4 w-4 mr-2 text-muted-foreground" />
-              <SelectValue placeholder="Select a dataset..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableTables.map(table => (
-                <SelectItem key={table.datasetId} value={table.datasetId}>
-                  <div className="flex items-center gap-2">
-                    <span>{table.filename}</span>
-                    {table.nRows ? (
-                      <Badge variant="secondary" className="text-xs">
-                        {table.nRows.toLocaleString()} rows
-                      </Badge>
-                    ) : null}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select
+          value={selectedDatasetId ?? ''}
+          onValueChange={handleDatasetSelect}
+          disabled={isLoadingTables || availableTables.length === 0}
+        >
+          <SelectTrigger className="w-[250px] h-9">
+            <Database className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Select a dataset..." />
+          </SelectTrigger>
+          <SelectContent>
+            {availableTables.map(table => (
+              <SelectItem key={table.datasetId} value={table.datasetId}>
+                <div className="flex items-center gap-2">
+                  <span>{table.filename}</span>
+                  {table.nRows ? (
+                    <Badge variant="secondary" className="text-xs">
+                      {table.nRows.toLocaleString()} rows
+                    </Badge>
+                  ) : null}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Loading state */}
@@ -169,9 +163,9 @@ export function PreprocessingPanel() {
                 <div>
                   <p className="font-medium">Analysis Failed</p>
                   <p className="text-sm text-muted-foreground mt-1">{error}</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="mt-3"
                     onClick={() =>
                       selectedDatasetId && projectId && analyze(projectId, selectedDatasetId)

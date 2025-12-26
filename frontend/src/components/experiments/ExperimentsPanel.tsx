@@ -151,10 +151,11 @@ export function ExperimentsPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b shrink-0">
-        <div>
-          <p className="text-sm font-semibold">Experiments</p>
-          <p className="text-xs text-muted-foreground">Train models and track metrics per dataset.</p>
+      <div className="flex h-14 items-center justify-between gap-2 px-4 border-b shrink-0">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold">Experiments</span>
+          <span className="text-xs text-muted-foreground hidden sm:inline">— Train models and track metrics</span>
         </div>
         <Button
           variant="ghost"

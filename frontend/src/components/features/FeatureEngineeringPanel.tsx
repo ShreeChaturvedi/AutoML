@@ -17,8 +17,7 @@ import { generateFeatureEngineeringCode } from '@/lib/features/codeGenerator';
 import type { FeatureSpec, FeatureMethod, FeatureCategory } from '@/types/feature';
 import { FEATURE_TEMPLATES } from '@/types/feature';
 import type { ToolCall, ToolResult, UiItem, UiSchema } from '@/types/llmUi';
-import { LlmToolPanel } from '@/components/llm/LlmToolPanel';
-import { useToolApproval } from '@/hooks/useToolApproval';
+import { ToolIndicator } from '@/components/llm/ToolIndicator';
 import { cn } from '@/lib/utils';
 import { Loader2, Play, Sparkles, Code, AlertTriangle } from 'lucide-react';
 
@@ -32,12 +31,30 @@ type SuggestionState = {
   params: Record<string, unknown>;
 };
 
+const MAX_TOOL_ATTEMPTS = 3;
+const AUTO_TOOL_DELAY_MS = 400;
+
 const methodCategoryMap = new Map<FeatureMethod, FeatureCategory>(
   FEATURE_TEMPLATES.map((template) => [template.method, template.category])
 );
 
-const stripJsonFence = (text: string) =>
-  text.replace(/```(?:json)?/g, '').replace(/```/g, '').trim();
+const stripAssistantArtifacts = (text: string) => {
+  if (!text) return '';
+  let cleaned = text.replace(/```(?:json)?/g, '').replace(/```/g, '');
+  const markerIndex = cleaned.indexOf('<<<JSON>>>');
+  if (markerIndex !== -1) {
+    cleaned = cleaned.slice(0, markerIndex);
+  }
+  const endIndex = cleaned.indexOf('<<<END>>>');
+  if (endIndex !== -1) {
+    cleaned = cleaned.slice(0, endIndex);
+  }
+  const jsonIndex = cleaned.search(/{\s*"version"\s*:\s*"1"/);
+  if (jsonIndex !== -1) {
+    cleaned = cleaned.slice(0, jsonIndex);
+  }
+  return cleaned.trim();
+};
 
 export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelProps) {
   const allFiles = useDataStore((state) => state.files);
@@ -78,7 +95,10 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRunningTools, setIsRunningTools] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestionState[]>([]);
-  const cleanedAssistantText = useMemo(() => stripJsonFence(assistantText), [assistantText]);
+  const autoToolRunRef = useRef<string | null>(null);
+  const toolHistoryRef = useRef<{ calls: ToolCall[]; results: ToolResult[] }>({ calls: [], results: [] });
+  const toolAttemptRef = useRef(0);
+  const cleanedAssistantText = useMemo(() => stripAssistantArtifacts(assistantText), [assistantText]);
 
   const [applyStatus, setApplyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
@@ -86,13 +106,15 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
   const [outputFormat, setOutputFormat] = useState<'csv' | 'json' | 'xlsx'>('csv');
 
   const abortRef = useRef<AbortController | null>(null);
-  const { approved, approve } = useToolApproval();
 
   const selectedDatasetFile = useMemo(
     () => datasetFiles.find((file) => file.id === selectedDataset),
     [datasetFiles, selectedDataset]
   );
-  const datasetColumns = selectedDatasetFile?.metadata?.columns ?? [];
+  const datasetColumns = useMemo(
+    () => selectedDatasetFile?.metadata?.columns ?? [],
+    [selectedDatasetFile]
+  );
 
   useEffect(() => {
     hydrateFromBackend(projectId);
@@ -158,12 +180,17 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
     setSuggestions(nextSuggestions);
   }, [assistantUi, featureById]);
 
-  const handleGenerate = useCallback(async (withToolResults?: ToolResult[]) => {
+  const handleGenerate = useCallback(async (withToolResults?: ToolResult[], withToolCalls?: ToolCall[]) => {
     if (!projectId || !selectedDatasetFile?.metadata?.datasetId) return;
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+
+    if (!withToolResults?.length) {
+      resetToolHistory();
+      toolAttemptRef.current = 0;
+    }
 
     setAssistantText('');
     setAssistantError(null);
@@ -179,6 +206,7 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
           datasetId: selectedDatasetFile.metadata.datasetId,
           targetColumn,
           prompt: prompt.trim() || undefined,
+          toolCalls: withToolCalls?.length ? withToolCalls : undefined,
           toolResults: withToolResults?.length ? withToolResults : undefined
         },
         (event) => {
@@ -188,10 +216,17 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
           if (event.type === 'envelope') {
             if (event.envelope.tool_calls?.length) {
               setToolCalls(event.envelope.tool_calls);
+              toolHistoryRef.current.calls = mergeToolCalls(
+                toolHistoryRef.current.calls,
+                event.envelope.tool_calls
+              );
               setAssistantUi(null);
             } else {
               setAssistantUi(event.envelope.ui ?? null);
               setToolCalls([]);
+            }
+            if (event.envelope.message) {
+              setAssistantText((prev) => (prev.trim() ? prev : event.envelope.message ?? ''));
             }
           }
           if (event.type === 'error') {
@@ -210,13 +245,23 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
     }
   }, [projectId, selectedDatasetFile, targetColumn, prompt]);
 
-  const handleRunTools = useCallback(async () => {
+  const handleRunTools = useCallback(async (auto = false) => {
     if (!toolCalls.length) return;
+    if (auto) {
+      if (toolAttemptRef.current >= MAX_TOOL_ATTEMPTS) {
+        setAssistantError(`Tool execution stopped after ${MAX_TOOL_ATTEMPTS} attempts.`);
+        return;
+      }
+      toolAttemptRef.current += 1;
+      await new Promise((resolve) => setTimeout(resolve, AUTO_TOOL_DELAY_MS));
+    }
     setIsRunningTools(true);
     try {
       const response = await executeToolCalls(projectId, toolCalls);
-      setToolResults(response.results);
-      await handleGenerate(response.results);
+      const mergedResults = mergeToolResults(toolHistoryRef.current.results, response.results);
+      toolHistoryRef.current.results = mergedResults;
+      setToolResults(mergedResults);
+      await handleGenerate(mergedResults, toolHistoryRef.current.calls);
     } catch (error) {
       setAssistantError(error instanceof Error ? error.message : 'Failed to execute tools.');
     } finally {
@@ -224,10 +269,38 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
     }
   }, [toolCalls, projectId, handleGenerate]);
 
+  // Auto-run tool calls when they arrive
+  useEffect(() => {
+    if (toolCalls.length === 0 || isRunningTools) return;
+    const key = toolCalls.map((call) => call.id).join('|');
+    if (autoToolRunRef.current === key) return;
+    autoToolRunRef.current = key;
+    void handleRunTools(true);
+  }, [toolCalls, isRunningTools, handleRunTools]);
+
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
     setIsGenerating(false);
   }, []);
+
+  const resetToolHistory = useCallback(() => {
+    toolHistoryRef.current = { calls: [], results: [] };
+    setToolCalls([]);
+    setToolResults([]);
+    toolAttemptRef.current = 0;
+  }, []);
+
+  const mergeToolCalls = (previous: ToolCall[], next: ToolCall[]) => {
+    const merged = new Map(previous.map((call) => [call.id, call]));
+    next.forEach((call) => merged.set(call.id, call));
+    return Array.from(merged.values());
+  };
+
+  const mergeToolResults = (previous: ToolResult[], next: ToolResult[]) => {
+    const merged = new Map(previous.map((result) => [result.id, result]));
+    next.forEach((result) => merged.set(result.id, result));
+    return Array.from(merged.values());
+  };
 
   const syncFeature = useCallback((state: SuggestionState, enabled: boolean) => {
     const method = state.item.feature.method as FeatureMethod;
@@ -643,13 +716,10 @@ export function FeatureEngineeringPanel({ projectId }: FeatureEngineeringPanelPr
               </Card>
             )}
 
-            <LlmToolPanel
+            <ToolIndicator
               toolCalls={toolCalls}
               results={toolResults}
               isRunning={isRunningTools}
-              approvalGranted={approved}
-              onApprove={approve}
-              onRun={handleRunTools}
             />
 
             {assistantUi ? (

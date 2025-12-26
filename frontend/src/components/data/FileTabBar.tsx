@@ -91,7 +91,7 @@ function SortableTab({
       case 'pdf':
         return <FileText className="h-4 w-4 text-rose-500" />;
       case 'markdown':
-        return <FileCode className="h-4 w-4 text-amber-500" />;
+        return <FileCode className="h-4 w-4 text-purple-500" />;
       case 'word':
         return <FileType className="h-4 w-4 text-sky-500" />;
       case 'text':
@@ -110,7 +110,7 @@ function SortableTab({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group flex h-10 cursor-pointer items-center gap-2 border-b-2 px-4 transition-colors flex-none',
+        'group flex h-14 cursor-pointer items-center gap-2 border-b-2 px-4 transition-colors flex-none',
         isActive
           ? 'border-primary bg-muted text-foreground'
           : 'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
@@ -257,15 +257,15 @@ export function FileTabBar({ projectId }: FileTabBarProps) {
 
   if (orderedTabs.length === 0) {
     return (
-      <div className="border-b border-border bg-card px-4 py-2 text-sm text-muted-foreground">
+      <div className="flex h-14 items-center border-b border-border bg-card px-4 text-sm text-muted-foreground">
         No files or queries to display
       </div>
     );
   }
 
   return (
-    <div className="border-b border-border bg-card">
-      <div className="flex items-center overflow-x-auto scrollbar-thin">
+    <div className="h-14 border-b border-border bg-card">
+      <div className="flex h-full items-center overflow-x-auto scrollbar-thin">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
